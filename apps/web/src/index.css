@@ -1,0 +1,411 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+/* Estilos de componentes de lizaui (tabla, barra de progreso, etc.). El paquete no exporta
+   el CSS en su mapa `exports`, por eso se importa por ruta relativa al node_modules real. */
+@import "../node_modules/lizaui/dist/lizaui.css";
+
+/* Clases de lizaui usadas dentro de su dist: Tailwind debe generarlas. */
+@source "../node_modules/lizaui/dist";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tokens de lizaui (mismos nombres que su tema de referencia) con la paleta del diseño
+ * de buzon-sol: azul de marca #1D4F7C, ámbar reservado a acciones con posible efecto en
+ * SUNAT, verde de estado correcto y rojo de error. Excepción documentada: no se usa el
+ * modo oscuro en esta entrega (el diseño de referencia solo define tema claro).
+ */
+@theme inline {
+	--font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "IBM Plex Mono", ui-monospace, monospace;
+	--default-font-family: var(--font-sans);
+
+	--color-foreground-50: var(--color-foreground-50);
+	--color-foreground-100: var(--color-foreground-100);
+	--color-foreground-200: var(--color-foreground-200);
+	--color-foreground-300: var(--color-foreground-300);
+	--color-foreground-400: var(--color-foreground-400);
+	--color-foreground-500: var(--color-foreground-500);
+	--color-foreground-600: var(--color-foreground-600);
+	--color-foreground-700: var(--color-foreground-700);
+	--color-foreground-800: var(--color-foreground-800);
+	--color-foreground-900: var(--color-foreground-900);
+	--color-foreground: var(--color-foreground-default);
+
+	--color-default-50: var(--color-default-50);
+	--color-default-100: var(--color-default-100);
+	--color-default-200: var(--color-default-200);
+	--color-default-300: var(--color-default-300);
+	--color-default-400: var(--color-default-400);
+	--color-default-500: var(--color-default-500);
+	--color-default-600: var(--color-default-600);
+	--color-default-700: var(--color-default-700);
+	--color-default-800: var(--color-default-800);
+	--color-default-900: var(--color-default-900);
+	--color-default-foreground: var(--color-default-foreground);
+	--color-default: var(--color-default-default);
+
+	--color-primary-50: var(--color-primary-50);
+	--color-primary-100: var(--color-primary-100);
+	--color-primary-200: var(--color-primary-200);
+	--color-primary-300: var(--color-primary-300);
+	--color-primary-400: var(--color-primary-400);
+	--color-primary-500: var(--color-primary-500);
+	--color-primary-600: var(--color-primary-600);
+	--color-primary-700: var(--color-primary-700);
+	--color-primary-800: var(--color-primary-800);
+	--color-primary-900: var(--color-primary-900);
+	--color-primary-foreground: var(--color-primary-foreground);
+	--color-primary: var(--color-primary-default);
+
+	--color-secondary-50: var(--color-secondary-50);
+	--color-secondary-100: var(--color-secondary-100);
+	--color-secondary-200: var(--color-secondary-200);
+	--color-secondary-300: var(--color-secondary-300);
+	--color-secondary-400: var(--color-secondary-400);
+	--color-secondary-500: var(--color-secondary-500);
+	--color-secondary-600: var(--color-secondary-600);
+	--color-secondary-700: var(--color-secondary-700);
+	--color-secondary-800: var(--color-secondary-800);
+	--color-secondary-900: var(--color-secondary-900);
+	--color-secondary-foreground: var(--color-secondary-foreground);
+	--color-secondary: var(--color-secondary-default);
+
+	--color-success-50: var(--color-success-50);
+	--color-success-100: var(--color-success-100);
+	--color-success-200: var(--color-success-200);
+	--color-success-300: var(--color-success-300);
+	--color-success-400: var(--color-success-400);
+	--color-success-500: var(--color-success-500);
+	--color-success-600: var(--color-success-600);
+	--color-success-700: var(--color-success-700);
+	--color-success-800: var(--color-success-800);
+	--color-success-900: var(--color-success-900);
+	--color-success-foreground: var(--color-success-foreground);
+	--color-success: var(--color-success-default);
+
+	--color-warning-50: var(--color-warning-50);
+	--color-warning-100: var(--color-warning-100);
+	--color-warning-200: var(--color-warning-200);
+	--color-warning-300: var(--color-warning-300);
+	--color-warning-400: var(--color-warning-400);
+	--color-warning-500: var(--color-warning-500);
+	--color-warning-600: var(--color-warning-600);
+	--color-warning-700: var(--color-warning-700);
+	--color-warning-800: var(--color-warning-800);
+	--color-warning-900: var(--color-warning-900);
+	--color-warning-foreground: var(--color-warning-foreground);
+	--color-warning: var(--color-warning-default);
+
+	--color-danger-50: var(--color-danger-50);
+	--color-danger-100: var(--color-danger-100);
+	--color-danger-200: var(--color-danger-200);
+	--color-danger-300: var(--color-danger-300);
+	--color-danger-400: var(--color-danger-400);
+	--color-danger-500: var(--color-danger-500);
+	--color-danger-600: var(--color-danger-600);
+	--color-danger-700: var(--color-danger-700);
+	--color-danger-800: var(--color-danger-800);
+	--color-danger-900: var(--color-danger-900);
+	--color-danger-foreground: var(--color-danger-foreground);
+	--color-danger: var(--color-danger-default);
+
+	--color-border: var(--border);
+	--border-small: var(--border-width-small);
+	--border-medium: var(--border-width-medium);
+	--border-large: var(--border-width-large);
+
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--radius-small: var(--radius-small);
+	--radius-medium: var(--radius-medium);
+	--radius-large: var(--radius-large);
+	--radius-input: calc(var(--radius-input) + 2px);
+
+	--color-divider: var(--color-divider-default);
+	--color-focus: var(--color-focus-default);
+	--color-overlay: var(--color-overlay-default);
+	--color-content1: var(--color-content1-default);
+	--color-content1-foreground: var(--color-content1-foreground);
+	--color-content2: var(--color-content2-default);
+	--color-content2-foreground: var(--color-content2-foreground);
+	--color-content3: var(--color-content3-default);
+	--color-content3-foreground: var(--color-content3-foreground);
+	--color-content4: var(--color-content4-default);
+	--color-content4-foreground: var(--color-content4-foreground);
+
+	--color-background: var(--background);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+
+	--height-input-default: var(--input-default);
+	--shadow-small: var(--shadow-csm);
+	--shadow-medium: var(--shadow-cmd);
+	--shadow-large: var(--shadow-clg);
+
+	/* Tokens semánticos propios de buzon-sol (diseño UX v2). */
+	--color-ink: #16191d;
+	--color-ink-2: #2f363e;
+	--color-ink-3: #3a424b;
+	--color-muted-ink: #4a525c;
+	--color-subtle-ink: #5b636e;
+	--color-line: #d9dde2;
+	--color-line-strong: #c3c9d0;
+	--color-surface: #f4f6f8;
+	--color-surface-2: #f1f4f7;
+	--color-row-read: #fafbfc;
+	--color-brand: #1d4f7c;
+	--color-brand-soft: #eaf0f7;
+	--color-brand-line: #c9d3de;
+	--color-ok: #1c6b3f;
+	--color-ok-soft: #e8f4ec;
+	--color-err: #a1281b;
+	--color-err-soft: #fbebe9;
+	--color-effect: #c98a1b;
+	--color-effect-ink: #7a4b00;
+	--color-effect-soft: #fff4db;
+	--color-effect-softer: #fff7e6;
+
+	--animate-spinner-ease-spin: spinner-spin 0.8s ease infinite;
+	--animate-spinner-linear-spin: spinner-spin 0.8s linear infinite;
+	--animate-drip-expand: drip-expand 420ms linear;
+
+	@keyframes spinner-spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
+	}
+	@keyframes drip-expand {
+		0% {
+			opacity: 0.2;
+			transform: scale(0);
+		}
+		100% {
+			opacity: 0;
+			transform: scale(2);
+		}
+	}
+}
+
+:root {
+	--motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+	--motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+	--motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+	--motion-duration-fast: 100ms;
+	--motion-duration-standard: 160ms;
+	--motion-duration-overlay: 220ms;
+
+	--color-foreground-50: #f8f9fa;
+	--color-foreground-100: #f1f3f5;
+	--color-foreground-200: #e3e6ea;
+	--color-foreground-300: #c3c9d0;
+	--color-foreground-400: #9aa2ac;
+	--color-foreground-500: #5b636e;
+	--color-foreground-600: #4a525c;
+	--color-foreground-700: #3a424b;
+	--color-foreground-800: #2f363e;
+	--color-foreground-900: #16191d;
+	--color-foreground-default: #16191d;
+
+	--color-divider-default: rgba(22, 25, 29, 0.15);
+	--color-focus-default: #1d4f7c;
+	--color-overlay-default: #000000;
+	--color-content1-default: #ffffff;
+	--color-content1-foreground: #16191d;
+	--color-content2-default: #f4f6f8;
+	--color-content2-foreground: #2f363e;
+	--color-content3-default: #e3e6ea;
+	--color-content3-foreground: #3a424b;
+	--color-content4-default: #c3c9d0;
+	--color-content4-foreground: #4a525c;
+
+	--color-default-50: #f8f9fa;
+	--color-default-100: #f1f3f5;
+	--color-default-200: #e3e6ea;
+	--color-default-300: #c3c9d0;
+	--color-default-400: #9aa2ac;
+	--color-default-500: #5b636e;
+	--color-default-600: #4a525c;
+	--color-default-700: #3a424b;
+	--color-default-800: #2f363e;
+	--color-default-900: #16191d;
+	--color-default-foreground: #16191d;
+	--color-default-default: #c3c9d0;
+
+	--color-primary-50: #f3f7fb;
+	--color-primary-100: #eaf0f7;
+	--color-primary-200: #c9daea;
+	--color-primary-300: #9fbcd7;
+	--color-primary-400: #3f6fa3;
+	--color-primary-500: #1d4f7c;
+	--color-primary-600: #16324d;
+	--color-primary-700: #123654;
+	--color-primary-800: #0e2a42;
+	--color-primary-900: #081a2a;
+	--color-primary-foreground: #ffffff;
+	--color-primary-default: #1d4f7c;
+
+	--color-secondary-50: #f1f4f7;
+	--color-secondary-100: #e3e6ea;
+	--color-secondary-200: #c3c9d0;
+	--color-secondary-300: #9aa2ac;
+	--color-secondary-400: #7a8591;
+	--color-secondary-500: #5b636e;
+	--color-secondary-600: #4a525c;
+	--color-secondary-700: #3a424b;
+	--color-secondary-800: #2f363e;
+	--color-secondary-900: #16191d;
+	--color-secondary-foreground: #ffffff;
+	--color-secondary-default: #4a525c;
+
+	--color-success-50: #f1f9f4;
+	--color-success-100: #e8f4ec;
+	--color-success-200: #c4e2cf;
+	--color-success-300: #8fc6a2;
+	--color-success-400: #6faf87;
+	--color-success-500: #1c6b3f;
+	--color-success-600: #185c36;
+	--color-success-700: #134a2b;
+	--color-success-800: #123f24;
+	--color-success-900: #0a2415;
+	--color-success-foreground: #ffffff;
+	--color-success-default: #1c6b3f;
+
+	--color-warning-50: #fffbf2;
+	--color-warning-100: #fff4db;
+	--color-warning-200: #fff0cc;
+	--color-warning-300: #f3d18f;
+	--color-warning-400: #e0a93f;
+	--color-warning-500: #c98a1b;
+	--color-warning-600: #b07a12;
+	--color-warning-700: #7a4b00;
+	--color-warning-800: #6b4200;
+	--color-warning-900: #4d3200;
+	--color-warning-foreground: #4d3200;
+	--color-warning-default: #c98a1b;
+
+	--color-danger-50: #fdf5f4;
+	--color-danger-100: #fbebe9;
+	--color-danger-200: #f2c6c0;
+	--color-danger-300: #d98a80;
+	--color-danger-400: #c2503f;
+	--color-danger-500: #a1281b;
+	--color-danger-600: #8a2217;
+	--color-danger-700: #721c13;
+	--color-danger-800: #5e160e;
+	--color-danger-900: #3a0d08;
+	--color-danger-foreground: #ffffff;
+	--color-danger-default: #a1281b;
+
+	--input-default: 2.5rem;
+	--border: #d9dde2;
+	--border-width-small: 1px;
+	--border-width-medium: 2px;
+	--border-width-large: 3px;
+	--radius: 0.5rem;
+	--radius-small: 4px;
+	--radius-medium: 6px;
+	--radius-large: 8px;
+	--radius-input: var(--radius-large);
+	--shadow-csm: 0 1px 2px rgb(22 25 29 / 0.06), 0 0 1px rgb(22 25 29 / 0.25);
+	--shadow-cmd: 0 2px 12px rgb(22 25 29 / 0.08), 0 0 1px rgb(22 25 29 / 0.3);
+	--shadow-clg: 0 20px 50px rgb(22 25 29 / 0.14), 0 0 1px rgb(22 25 29 / 0.3);
+
+	--background: #f4f6f8;
+	--foreground: #16191d;
+	--card: #ffffff;
+	--card-foreground: #16191d;
+	--popover: #ffffff;
+	--popover-foreground: #16191d;
+	--muted: #f1f3f5;
+	--muted-foreground: #4a525c;
+	--accent: #eaf0f7;
+	--accent-foreground: #16324d;
+	--destructive: #a1281b;
+	--input: #9aa2ac;
+	--ring: #1d4f7c;
+	--select-input-bg: #ffffff;
+
+	color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--motion-duration-fast: 0ms;
+		--motion-duration-standard: 0ms;
+		--motion-duration-overlay: 0ms;
+	}
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	html,
+	body {
+		@apply bg-background text-foreground font-sans antialiased;
+	}
+	body {
+		min-height: 100dvh;
+	}
+	/* Foco visible de 3 px en todos los controles (diseño §6). */
+	:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+		outline: 3px solid var(--color-brand);
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+}
+
+@layer components {
+	.mono {
+		font-family: var(--font-mono);
+		font-feature-settings: "tnum";
+	}
+	/* Cuerpo remoto: tipografía de lectura, 72 caracteres, aislado del resto de estilos. */
+	.remote-body {
+		max-width: 72ch;
+		font-size: 1rem;
+		line-height: 1.65;
+		color: var(--color-ink);
+		overflow-wrap: anywhere;
+	}
+	.remote-body p {
+		margin: 0 0 0.9em;
+	}
+	.remote-body table {
+		border-collapse: collapse;
+		margin: 0.5em 0 1em;
+	}
+	.remote-body td,
+	.remote-body th {
+		border: 1px solid var(--color-line);
+		padding: 4px 8px;
+	}
+	.remote-body a {
+		color: var(--color-brand);
+		text-decoration: underline;
+	}
+}
