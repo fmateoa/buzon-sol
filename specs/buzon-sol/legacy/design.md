@@ -1,6 +1,8 @@
 # SDD · Diseño del lector de Buzón SOL
 
-Implementación de referencia para [requirements.md](requirements.md), basada en [contracts.md](contracts.md). El diseño evita fijar un framework web o un proveedor de base de datos. La primera versión puede ser un proceso local con Playwright, una base SQLite y un directorio de adjuntos. No necesita cola distribuida ni microservicios para cumplir los requisitos observados.
+> **Alcance histórico (v1):** arquitectura de lector supervisado. Para la arquitectura de aplicación multiusuario y programador, ver [spec backend](../backend/spec.md). Conservar de aquí el algoritmo de paginación y las precauciones de lectura/descarga sustentadas por [contracts.md](../sunat/contracts.md).
+
+Implementación de referencia para [requirements.md](requirements.md), basada en [contracts.md](../sunat/contracts.md). El diseño evita fijar un framework web o un proveedor de base de datos. La primera versión puede ser un proceso local con Playwright, una base SQLite y un directorio de adjuntos. No necesita cola distribuida ni microservicios para cumplir los requisitos observados.
 
 ## 1. Componentes mínimos
 
@@ -94,7 +96,7 @@ logout(context): LogoutResult
 
 Cada operación devuelve también `httpStatus`, tipo de contenido y diagnóstico redactado. El adaptador valida el esquema mínimo y conserva campos desconocidos en un JSON bruto para tolerar cambios aditivos. La lógica de negocio no accede directamente a cookies ni arma URLs con tokens.
 
-`getLabelCatalog` extrae `listEtiquetas` de `/visor/master` o, si la web cambia, deja el catálogo como no disponible y conserva el código de cada fila. El catálogo conocido en `contracts.md` sirve para comparar, no para descartar códigos nuevos.
+`getLabelCatalog` extrae `listEtiquetas` de `/visor/master` o, si la web cambia, deja el catálogo como no disponible y conserva el código de cada fila. El catálogo conocido en [contracts.md](../sunat/contracts.md) sirve para comparar, no para descartar códigos nuevos.
 
 ## 5. Modelo lógico de datos
 

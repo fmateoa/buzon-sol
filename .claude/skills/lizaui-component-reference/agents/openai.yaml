@@ -1,0 +1,4 @@
+interface:
+  display_name: "LizaUI Component Reference"
+  short_description: "Referencia real de componentes LizaUI"
+  default_prompt: "Usa $lizaui-component-reference para consultar imports, props, variantes y demos reales de un componente LizaUI."

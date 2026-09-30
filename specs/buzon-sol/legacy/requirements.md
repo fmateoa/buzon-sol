@@ -1,6 +1,8 @@
 # SDD · Requisitos del lector de Buzón SOL
 
-**Estado:** propuesta implementable · **Base empírica:** [BUZON_SOL_APIS.md](BUZON_SOL_APIS.md), inspección de dos cuentas el 29/09/2026 (Lima).  
+> **Alcance histórico (v1):** lector supervisado. Para la aplicación multiusuario, roles, credenciales cifradas y programación, comenzar en [README.md](../README.md) y [requisitos de producto](../product/requirements.md). Las observaciones técnicas de SUNAT siguen siendo evidencia, pero este alcance no sustituye la v2.
+
+**Estado:** propuesta implementable · **Base empírica:** [BUZON_SOL_APIS.md](../sunat/BUZON_SOL_APIS.md), inspección de dos cuentas el 29/09/2026 (Lima).  
 **Objetivo:** construir un sistema que inventarie y, cuando el operador lo autorice, obtenga el contenido y los archivos de Mensajes y Notificaciones del Buzón electrónico SOL.
 
 ## 1. Límites y términos
@@ -84,7 +86,7 @@ Estas decisiones permiten implementar el lector ahora; se pueden cambiar por con
 ### RF-06 · Carpetas, etiquetas y búsqueda
 
 1. Consultar `/visor/ajax/listarCarpetas`; aceptar `[]` o carpetas con `codCarpeta`, `nomCarpeta`, `cantMensajes`.
-2. Mostrar el catálogo de etiquetas provisto por `/visor/master` y el `codEtiqueta` de cada fila. Los códigos observados constan en [contracts.md](contracts.md).
+2. Mostrar el catálogo de etiquetas provisto por `/visor/master` y el `codEtiqueta` de cada fila. Los códigos observados constan en [contracts.md](../sunat/contracts.md).
 3. Permitir consulta por `codEtiqueta` y por asunto (`des_asunto`), indicando que no hay parámetro observado para rango de fechas.
 4. Ofrecer filtros locales por rango de `fecPublica`, leído/no leído, etiqueta, carpeta y texto sin afirmar que SUNAT los soporta como filtros remotos. Un filtro por fecha debe aplicarse después de recorrer las páginas necesarias; no debe cortar el recorrido anticipadamente.
 5. `tipoOrden=LEIDOS` y `NO_LEIDOS` puede priorizar estados, pero no limita el conjunto de resultados. El sistema filtrará localmente por `indEstado` si el usuario pide exclusivamente un estado.

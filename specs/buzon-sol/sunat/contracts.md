@@ -15,6 +15,8 @@ El enlace de portada usa `GET /v1/clientessol/{id-cliente}/oauth2/loginMenuSol?o
 
 El formulario envía `POST .../oauth2/j_security_check`. No se especifica aquí el cuerpo del login ni se almacena la contraseña. El menú carga el visor en `/ol-ti-itvisornoti/visor/master?hc={secreto}&token={secreto}`. `token` y el `Referer` que lo contiene son secretos de sesión. Las peticiones JSON observadas incluyeron `X-Ruc` y `X-Requested-With: XMLHttpRequest`; el navegador autenticado puede añadir otro estado necesario. **No se ha verificado autenticación HTTP independiente del navegador.**
 
+**Revisión del 30/09/2026, sin registrar secretos:** una consulta HTTP pública del formulario devolvió `200`, encabezados `Set-Cookie` y un formulario `POST` con acción relativa `j_security_check`. El JavaScript de envío copia RUC, usuario y contraseña a campos ocultos; también contempla un campo `captcha` cuando se presenta ese desafío. En una sesión autorizada, el envío manual llegó al menú y al visor. Esto hace razonable probar un cliente HTTP con cookie jar y redirecciones, pero **no prueba** que el login desatendido o las llamadas autenticadas fuera del navegador funcionen; esos pasos siguen pendientes de una prueba específica.
+
 Al entrar en el visor, la web observada pidió el listado y luego abrió automáticamente el detalle del primer registro. Esa llamada puede cambiar un no leído a leído; por tanto el simple acceso a la interfaz no está demostrado como pasivo.
 
 Base de endpoints de visor: `https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor`.

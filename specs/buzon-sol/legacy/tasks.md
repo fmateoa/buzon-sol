@@ -1,6 +1,8 @@
 # SDD · Plan de implementación y verificación
 
-Este plan implementa [requirements.md](requirements.md) contra el contrato de [contracts.md](contracts.md) y el diseño de [design.md](design.md). Cada tarea termina con una prueba observable; los servicios de SUNAT no se invocan desde CI con cuentas reales.
+> **Plan histórico (v1):** los planes actuales de desarrollo son [frontend](../plan/frontend.md) y [backend](../plan/backend.md). Las pruebas del adaptador descritas aquí se reutilizan donde corresponda.
+
+Este plan implementa [requirements.md](requirements.md) contra el contrato de [contracts.md](../sunat/contracts.md) y el diseño de [design.md](design.md). Cada tarea termina con una prueba observable; los servicios de SUNAT no se invocan desde CI con cuentas reales.
 
 ## Hito 0 · Preparar el proyecto
 
