@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
-import { AppError } from "@buzon-sol/domain";
+import { AppError, logEvent } from "@buzon-sol/domain";
 import { loadSolCredential, type SolCredential } from "./credentials.js";
+import { noticeAdmins } from "./notices.js";
 
 export interface ConnectionClient {
   testConnection(): Promise<"valid" | "invalid">;
@@ -56,14 +57,7 @@ export class ConnectionProcessor {
             await manager.query(
               "UPDATE sync_schedules SET state='paused',pause_reason='invalid_credential',next_run_at=NULL WHERE account_id=?",
               [accountId]);
-            const admins: { id: string }[] = await manager.query(
-              `SELECT DISTINCT u.id FROM app_users u JOIN roles r ON r.id=u.role_id
-               JOIN role_permissions p ON p.role_id=r.id AND p.permission='manage_accounts'
-               WHERE u.status='active' AND (r.all_accounts=true OR EXISTS
-                 (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=?))`, [accountId]);
-            for (const admin of admins) await manager.query(
-              "INSERT INTO in_app_notices (id,account_id,user_id,kind) VALUES (?,?,?,?)",
-              [randomUUID(), accountId, admin.id, "invalid_credential"]);
+            await noticeAdmins(manager, accountId, "invalid_credential");
           }
           await manager.query(
             "UPDATE connection_tests SET status=?,error_code=?,finished_at=UTC_TIMESTAMP(6) WHERE id=?",
@@ -79,7 +73,7 @@ export class ConnectionProcessor {
       }
     } finally {
       try { await client?.close?.(); }
-      catch { process.stderr.write("SUNAT session cleanup failed\n"); }
+      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
       if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
       await lease.release();
     }

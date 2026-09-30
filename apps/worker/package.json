@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test src/*.test.ts",
-    "test:integration": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
+    "test:integration": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
+    "rotate:keys": "tsx src/rotate-keys.ts"
   },
   "dependencies": {
     "@buzon-sol/domain": "workspace:*",

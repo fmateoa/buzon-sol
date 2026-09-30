@@ -17,7 +17,8 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
     if (box === "messages" && page === 1) return json([{ codMensaje: 1, indEstado: 0 }, { codMensaje: 2, indEstado: 0 }]);
     if (box === "messages" && page === 2) {
       if (failOnce) { failOnce = false; throw new AppError("remote_unavailable"); }
-      return json([{ codMensaje: 2, indEstado: 0 }, { codMensaje: 3, indEstado: 1 }]);
+      return json([{ codMensaje: 2, indEstado: 0 }, { codMensaje: 3, indEstado: 1, fecPublica: "29/09/2026 18:23:54",
+        codUsremisor: "EMISOR_FICTICIO", codEtiqueta: "01", codCarpeta: null, cantidadArchAdj: 2 }]);
     }
     if (box === "notifications" && page === 1) return json([{ codMensaje: 4, indEstado: 0 }]);
     return json([]);
@@ -36,6 +37,10 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
     await runner.run(accountId, runId);
     const count: { n: number }[] = await db.query("SELECT COUNT(*) AS n FROM mail_items WHERE account_id=?", [accountId]);
     assert.equal(Number(count[0].n), 4);
+    const normalized: { published_at: Date; sender_text: string; label_code: string; folder_code: string | null; attachment_count: number }[] =
+      await db.query("SELECT published_at,sender_text,label_code,folder_code,attachment_count FROM mail_items WHERE account_id=? AND cod_mensaje=?", [accountId, "3"]);
+    assert.deepEqual([new Date(normalized[0].published_at).toISOString(), normalized[0].sender_text, normalized[0].label_code,
+      normalized[0].folder_code, normalized[0].attachment_count], ["2026-09-29T23:23:54.000Z", "EMISOR_FICTICIO", "01", null, 2]);
     const pages: { page_number: number; unique_rows: number; confirmed_empty: number }[] = await db.query(
       "SELECT page_number,unique_rows,confirmed_empty FROM sync_pages WHERE run_id=? ORDER BY tipo_msj,page_number", [runId]);
     assert.deepEqual(pages.map((p) => p.unique_rows), [2, 1, 0, 1, 0]);

@@ -21,7 +21,7 @@ function localParts(date: Date): { year: number; month: number; day: number; hou
   return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute };
 }
 
-function limaInstant(year: number, month: number, day: number, minuteOfDay: number): Date {
+export function limaInstant(year: number, month: number, day: number, minuteOfDay: number): Date {
   const approximate = Date.UTC(year, month - 1, day, Math.floor(minuteOfDay / 60), minuteOfDay % 60);
   const local = localParts(new Date(approximate));
   const offset = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute) - approximate;

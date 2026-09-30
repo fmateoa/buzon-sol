@@ -7,6 +7,8 @@ import { SyncFailures2026093000004 } from "../../api/src/db/migrations/202609300
 import { FileSource2026093000005 } from "../../api/src/db/migrations/2026093000005-FileSource";
 import { ConnectionTests2026093000006 } from "../../api/src/db/migrations/2026093000006-ConnectionTests";
 import { FileFetches2026093000007 } from "../../api/src/db/migrations/2026093000007-FileFetches";
+import { MailListing2026093000008 } from "../../api/src/db/migrations/2026093000008-MailListing";
+import { CatalogsAndNotices2026093000009 } from "../../api/src/db/migrations/2026093000009-CatalogsAndNotices";
 
 export async function testDb(): Promise<DataSource> {
   const db = new DataSource({
@@ -14,7 +16,7 @@ export async function testDb(): Promise<DataSource> {
     username: process.env.DB_USER ?? "buzon", password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME ?? "buzon_sol", timezone: "Z", synchronize: false,
     migrations: [InitialSchema2026093000000, AppSessions2026093000001, AccountLookup2026093000002,
-      ScheduleOptions2026093000003, SyncFailures2026093000004, FileSource2026093000005, ConnectionTests2026093000006, FileFetches2026093000007],
+      ScheduleOptions2026093000003, SyncFailures2026093000004, FileSource2026093000005, ConnectionTests2026093000006, FileFetches2026093000007, MailListing2026093000008, CatalogsAndNotices2026093000009],
   });
   await db.initialize();
   await db.runMigrations();

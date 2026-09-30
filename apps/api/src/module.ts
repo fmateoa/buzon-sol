@@ -10,6 +10,7 @@ import { OperationsService } from "./operations";
 import { FilesService } from "./files";
 import { InventoryService } from "./inventory";
 import { ConnectionService } from "./connection";
+import { MailboxService } from "./mailbox";
 
 @Controller("health")
 class HealthController {
@@ -23,7 +24,7 @@ class HealthController {
   controllers: [HealthController, IdentityController],
   providers: [
     { provide: DB, useFactory: async () => dataSource.isInitialized ? dataSource : dataSource.initialize() },
-    AuthService, IdentityService, AccountsService, SchedulingService, ReadingService, OperationsService, FilesService, InventoryService, ConnectionService,
+    AuthService, IdentityService, AccountsService, SchedulingService, ReadingService, OperationsService, FilesService, InventoryService, ConnectionService, MailboxService,
   ],
 })
 export class AppModule {}

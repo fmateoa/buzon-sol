@@ -59,7 +59,9 @@ export interface VisibleAccountDto {
   active: boolean;
 }
 
-export { encryptForWorker, decryptInWorker } from "./secrets.js";
+export { encryptForWorker, decryptInWorker, envelopeKeyId } from "./secrets.js";
 export { nextRuns, validateSchedule, WEEKDAYS, type ScheduleInput, type Frequency, type Weekday } from "./schedule.js";
 export { INVENTORY_QUEUE, READ_QUEUE, CONNECTION_QUEUE, FILE_QUEUE, type InventoryJob, type ReadJob, type ConnectionJob, type FileJob } from "./jobs.js";
 export { redisOptions, redisApiOptions } from "./redis.js";
+export { parseSunatDateTime } from "./mail.js";
+export { logEvent, redactFields, setLogSink, type LogFields } from "./log.js";

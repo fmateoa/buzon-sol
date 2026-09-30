@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
-import { AppError } from "@buzon-sol/domain";
+import { AppError, logEvent } from "@buzon-sol/domain";
 import { S3Storage } from "@buzon-sol/storage";
 import { FileProcessor, type FileClient, type ObjectStore } from "./files.js";
 
@@ -11,12 +11,13 @@ export class FileFetchProcessor {
     private readonly store: ObjectStore = new S3Storage()) {}
 
   async process(accountId: string, fetchId: string): Promise<void> {
-    const rows: { file_id: string; actor_user_id: string; status: string }[] = await this.db.query(
+    const rows: { file_id: string; actor_user_id: string | null; status: string }[] = await this.db.query(
       "SELECT file_id,actor_user_id,status FROM file_fetches WHERE id=? AND account_id=?", [fetchId, accountId]);
     const request = rows[0];
     if (!request) throw new AppError("not_found");
     if (["complete", "failed", "denied"].includes(request.status)) return;
     const authorize = async () => {
+      if (request.actor_user_id === null) return this.authorizeSystem(accountId, request.file_id);
       const permitted: { id: string }[] = await this.db.query(
         `SELECT u.id FROM app_users u JOIN roles r ON r.id=u.role_id
          JOIN role_permissions p ON p.role_id=r.id AND p.permission='download_file'
@@ -46,11 +47,23 @@ export class FileFetchProcessor {
       throw error;
     } finally {
       try { await client?.close?.(); }
-      catch { process.stderr.write("SUNAT session cleanup failed\n"); }
+      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
     }
   }
 
-  private async finish(fetchId: string, accountId: string, actorId: string,
+  /** P-03 system fetch: still allowed only while the schedule opts in and the item stays read with stored detail. */
+  private async authorizeSystem(accountId: string, fileId: string): Promise<void> {
+    const rows: { ok: number }[] = await this.db.query(
+      `SELECT 1 AS ok FROM file_assets f
+       JOIN sunat_accounts a ON a.id=f.account_id AND a.active=true
+       JOIN sync_schedules s ON s.account_id=f.account_id AND s.download_read_attachments=true
+       JOIN mail_items i ON i.id=f.item_id AND i.account_id=f.account_id AND i.ind_estado<>0
+       JOIN mail_details d ON d.item_id=f.item_id AND d.account_id=f.account_id
+       WHERE f.id=? AND f.account_id=?`, [fileId, accountId]);
+    if (!rows.length) throw new AppError("forbidden");
+  }
+
+  private async finish(fetchId: string, accountId: string, actorId: string | null,
     status: string, code: string | null): Promise<void> {
     await this.db.transaction(async (manager) => {
       await manager.query(
