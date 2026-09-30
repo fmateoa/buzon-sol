@@ -1,0 +1,32 @@
+{
+  "name": "@buzon-sol/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test:integration": "node --import tsx --test test/*.test.ts",
+    "migration:run": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:run",
+    "migration:revert": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:revert",
+    "migration:show": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:show",
+    "bootstrap:admin": "tsx src/bootstrap-admin.ts"
+  },
+  "dependencies": {
+    "@buzon-sol/domain": "workspace:*",
+    "@buzon-sol/storage": "workspace:*",
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-fastify": "^11.1.0",
+    "argon2": "^0.44.0",
+    "bullmq": "^5.0.0",
+    "fastify": "^5.0.0",
+    "mysql2": "^3.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.0",
+    "typeorm": "^0.3.0"
+  },
+  "devDependencies": { "@types/node": "^26.6.3", "tsx": "^4.0.0", "typescript": "^6.0.3", "ts-node": "^10.9.2" }
+}

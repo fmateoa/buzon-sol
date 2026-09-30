@@ -1,0 +1,574 @@
+openapi: 3.1.0
+info:
+  title: Buzón SOL backend
+  version: 0.1.0
+  description: >-
+    Contrato actual de la API. Los comandos SUNAT permanecen desactivados hasta
+    superar las puertas de validación correspondientes. Fechas internas en UTC.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      operationId: health
+      security: []
+      responses:
+        '200': { description: Servicio iniciado }
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '201':
+          description: Sesión de 12 horas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '204': { description: Sesión revocada }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      operationId: currentUser
+      responses:
+        '200':
+          description: Identidad y permisos vigentes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Principal' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts:
+    get:
+      operationId: visibleAccounts
+      x-permission: view_mailbox
+      responses:
+        '200': { description: Cuentas visibles para el rol }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/mail:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: listMail
+      x-permission: view_mailbox
+      parameters:
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: Metadatos persistidos; reviewed es privado del usuario
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MailItem' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/summary:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: accountSummary
+      x-permission: view_mailbox
+      responses:
+        '200': { description: Estado actual y línea base de la última corrida completa }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/activity:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: accountActivity
+      x-permission: view_mailbox
+      responses:
+        '200': { description: Corrida actual, páginas y últimas 20 corridas }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/inventory:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    post:
+      operationId: startInventory
+      x-permission: run_inventory
+      responses:
+        '201':
+          description: Corrida persistida y encolada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/runs/{runId}/resume:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/RunId' }
+    post:
+      operationId: resumeInventory
+      x-permission: run_inventory
+      responses:
+        '201':
+          description: Corrida reencolada desde su checkpoint
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/items/{itemId}/read:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/ItemId' }
+    post:
+      operationId: readContent
+      x-permission: read_content
+      description: Registra la intención antes de abrir detalle remoto; puede cambiar indEstado.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,100}$' }
+      responses:
+        '201':
+          description: Evento de lectura existente o nuevo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/items/{itemId}/detail:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/ItemId' }
+    get:
+      operationId: storedDetail
+      x-permission: read_content
+      responses:
+        '200': { description: HTML saneado y archivos asociados ya persistidos }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/items/{itemId}/review:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/ItemId' }
+    patch:
+      operationId: setReviewed
+      x-permission: mark_reviewed
+      description: Cambia solo el estado local del usuario; no llama a SUNAT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewInput' }
+      responses:
+        '204': { description: Estado local actualizado y auditado }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/files/{fileId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/FileId' }
+    get:
+      operationId: downloadStoredFile
+      x-permission: download_file
+      responses:
+        '200':
+          description: Archivo privado ya almacenado
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/files/{fileId}/fetch:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/FileId' }
+    post:
+      operationId: fetchFile
+      x-permission: download_file
+      description: Obtiene un archivo descubierto en una lectura explícita previa.
+      responses:
+        '201': { description: Obtención persistida y encolada, o archivo ya almacenado }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/files/{fileId}/fetches/{fetchId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/FileId' }
+      - { $ref: '#/components/parameters/FetchId' }
+    get:
+      operationId: fileFetchStatus
+      x-permission: download_file
+      responses:
+        '200': { description: Estado persistido de la obtención }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/schedule:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: getSchedule
+      x-permission: configure_schedule
+      responses:
+        '200': { description: Configuración persistida y próximos horarios Lima }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: saveSchedule
+      x-permission: configure_schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleInput' }
+      responses:
+        '204': { description: Programación guardada }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts:
+    get:
+      operationId: managedAccounts
+      x-permission: manage_accounts
+      responses:
+        '200': { description: Cuentas con RUC y usuario SOL enmascarados }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createAccount
+      x-permission: manage_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountInput' }
+      responses:
+        '201': { description: ID de nueva cuenta; no devuelve secretos }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    patch:
+      operationId: updateAccount
+      x-permission: manage_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountUpdate' }
+      responses:
+        '204': { description: Alias y usuario SOL actualizados }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/active:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    patch:
+      operationId: setAccountActive
+      x-permission: manage_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActiveInput' }
+      responses:
+        '204': { description: Cuenta activada o desactivada }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/credential:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    post:
+      operationId: replaceCredential
+      x-permission: manage_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CredentialInput' }
+      responses:
+        '204': { description: Clave SOL reemplazada y cifrada para el worker }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/connection-tests:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    post:
+      operationId: testConnection
+      x-permission: manage_accounts
+      responses:
+        '201': { description: Prueba de conexión persistida y encolada; no expone credenciales }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/connection-tests/{testId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { $ref: '#/components/parameters/TestId' }
+    get:
+      operationId: connectionTest
+      x-permission: manage_accounts
+      responses:
+        '200': { description: Estado persistido de la prueba sin secretos }
+        default: { $ref: '#/components/responses/Error' }
+  /users:
+    get:
+      operationId: listUsers
+      x-permission: manage_users_roles
+      responses:
+        '200': { description: Usuarios sin hashes de contraseña }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createUser
+      x-permission: manage_users_roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '201': { description: ID del nuevo usuario }
+        default: { $ref: '#/components/responses/Error' }
+  /users/{userId}:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    patch:
+      operationId: updateUser
+      x-permission: manage_users_roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserUpdate' }
+      responses:
+        '204': { description: Usuario actualizado }
+        default: { $ref: '#/components/responses/Error' }
+  /users/{userId}/status:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    patch:
+      operationId: setUserStatus
+      x-permission: manage_users_roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserStatusInput' }
+      responses:
+        '204': { description: Usuario habilitado o deshabilitado }
+        default: { $ref: '#/components/responses/Error' }
+  /roles:
+    get:
+      operationId: listRoles
+      x-permission: manage_users_roles
+      responses:
+        '200': { description: Roles, permisos y cuentas asignadas }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createRole
+      x-permission: manage_users_roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleInput' }
+      responses:
+        '201': { description: ID del nuevo rol }
+        default: { $ref: '#/components/responses/Error' }
+  /roles/{roleId}:
+    parameters:
+      - { $ref: '#/components/parameters/RoleId' }
+    patch:
+      operationId: updateRole
+      x-permission: manage_users_roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleInput' }
+      responses:
+        '204': { description: Rol actualizado; revocación efectiva inmediatamente }
+        default: { $ref: '#/components/responses/Error' }
+  /audit:
+    get:
+      operationId: listAudit
+      x-permission: view_audit
+      responses:
+        '200': { description: Últimos 100 eventos visibles }
+        default: { $ref: '#/components/responses/Error' }
+  /audit.csv:
+    get:
+      operationId: exportAudit
+      x-permission: view_audit
+      responses:
+        '200':
+          description: Hasta 10000 eventos visibles, sin secretos
+          content:
+            text/csv:
+              schema: { type: string }
+        default: { $ref: '#/components/responses/Error' }
+  /notices:
+    get:
+      operationId: listNotices
+      responses:
+        '200': { description: Avisos visibles del usuario activo }
+        default: { $ref: '#/components/responses/Error' }
+  /notices/{noticeId}/read:
+    parameters:
+      - { $ref: '#/components/parameters/NoticeId' }
+    post:
+      operationId: markNoticeRead
+      responses:
+        '204': { description: Aviso leído localmente }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    AccountId: { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+    ItemId: { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    FileId: { name: fileId, in: path, required: true, schema: { type: string, format: uuid } }
+    RunId: { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    RoleId: { name: roleId, in: path, required: true, schema: { type: string, format: uuid } }
+    NoticeId: { name: noticeId, in: path, required: true, schema: { type: string, format: uuid } }
+    TestId: { name: testId, in: path, required: true, schema: { type: string, format: uuid } }
+    FetchId: { name: fetchId, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Error:
+      description: Código tipado; el HTTP depende del código
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum: [unauthenticated, forbidden, not_found, validation, needs_credential, invalid_credential, remote_session_expired, remote_unavailable, schema_changed, incomplete_inventory, conflict_running, paused, storage_unavailable, internal]
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    LoginResult:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token: { type: string, description: Token opaco; solo aparece en esta respuesta }
+        expiresAt: { type: string, format: date-time }
+    Principal:
+      type: object
+      required: [id, email, name, roleId, permissions, allAccounts, accountIds]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        roleId: { type: string, format: uuid }
+        permissions:
+          type: array
+          items: { type: string }
+        allAccounts: { type: boolean }
+        accountIds:
+          type: array
+          items: { type: string, format: uuid }
+    MailItem:
+      type: object
+      required: [id, tipoMsj, codMensaje, indEstado, reviewed]
+      properties:
+        id: { type: string, format: uuid }
+        tipoMsj: { type: integer, enum: [1, 2] }
+        codMensaje: { type: string }
+        indEstado: { type: integer, description: Estado observado en SUNAT }
+        reviewed: { type: boolean, description: Estado local de este usuario }
+    RunResult:
+      type: object
+      required: [id, state]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [pending, running, complete, partial, retrying, paused] }
+    ReadResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+    ReviewInput:
+      type: object
+      required: [reviewed]
+      properties:
+        reviewed: { type: boolean }
+    AccountInput:
+      type: object
+      required: [alias, ruc, solUser]
+      properties:
+        alias: { type: string, maxLength: 160 }
+        ruc: { type: string, pattern: '^[0-9]{11}$', writeOnly: true }
+        solUser: { type: string, maxLength: 100, writeOnly: true }
+    AccountUpdate:
+      type: object
+      required: [alias, solUser]
+      properties:
+        alias: { type: string, maxLength: 160 }
+        solUser: { type: string, maxLength: 100, writeOnly: true }
+    ActiveInput:
+      type: object
+      required: [active]
+      properties:
+        active: { type: boolean }
+    CredentialInput:
+      type: object
+      required: [solPassword]
+      properties:
+        solPassword: { type: string, minLength: 1, maxLength: 1024, writeOnly: true }
+    UserInput:
+      type: object
+      required: [name, email, password, roleId]
+      properties:
+        name: { type: string, maxLength: 160 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12, maxLength: 1024, writeOnly: true }
+        roleId: { type: string, format: uuid }
+    UserUpdate:
+      type: object
+      required: [name, email, roleId]
+      properties:
+        name: { type: string, maxLength: 160 }
+        email: { type: string, format: email }
+        roleId: { type: string, format: uuid }
+    UserStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, disabled] }
+    RoleInput:
+      type: object
+      required: [name, permissions, allAccounts, accountIds]
+      properties:
+        name: { type: string, maxLength: 100 }
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [view_mailbox, read_content, download_file, mark_reviewed, run_inventory, view_audit, configure_schedule, manage_accounts, manage_users_roles]
+        allAccounts: { type: boolean }
+        accountIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ScheduleInput:
+      type: object
+      required: [frequency, days, windowStart, windowEnd, boxes, state, downloadReadAttachments, notifyInApp, notifyDailyEmail, remoteEffectAccepted]
+      properties:
+        frequency: { type: string, enum: [30m, 1h, 2h, 4h, daily] }
+        days:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        windowStart: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        windowEnd: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        boxes:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [messages, notifications] }
+        state: { type: string, enum: [disabled, paused], description: active no disponible hasta validar cron SUNAT }
+        downloadReadAttachments: { type: boolean }
+        notifyInApp: { type: boolean }
+        notifyDailyEmail: { type: boolean, const: false }
+        remoteEffectAccepted: { type: boolean }

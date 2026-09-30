@@ -1,0 +1,22 @@
+{
+  "estadoRespuesta": null,
+  "page": null,
+  "startPage": 1,
+  "endPage": 25,
+  "total": 108,
+  "records": 2681,
+  "rows": [
+    {
+      "codMensaje": 900001,
+      "indTipmsj": 1,
+      "indEstado": 0,
+      "desAsunto": "Asunto ficticio A",
+      "fecPublica": "29/09/2026 18:23:54",
+      "codUsremisor": "EMISOR_FICTICIO",
+      "cantidadArchAdj": 0,
+      "codEtiqueta": "00",
+      "codCarpeta": null,
+      "numRuc": null
+    }
+  ]
+}

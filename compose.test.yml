@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: localtest
+      MYSQL_DATABASE: buzon_sol
+      MYSQL_USER: buzon
+      MYSQL_PASSWORD: localtest
+    ports:
+      - "127.0.0.1:33361:3306"
+    volumes:
+      - buzon_mysql_test:/var/lib/mysql
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:36379:6379"
+    volumes:
+      - buzon_redis_test:/data
+
+  s3mock:
+    image: adobe/s3mock:latest
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: buzon-test
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    ports:
+      - "127.0.0.1:39090:9090"
+    volumes:
+      - buzon_s3_test:/s3mockroot
+
+volumes:
+  buzon_mysql_test:
+  buzon_redis_test:
+  buzon_s3_test:

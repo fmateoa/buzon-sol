@@ -1,0 +1,24 @@
+{
+  "name": "@buzon-sol/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts",
+    "test:integration": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
+  },
+  "dependencies": {
+    "@buzon-sol/domain": "workspace:*",
+    "@buzon-sol/storage": "workspace:*",
+    "@buzon-sol/sunat-adapter": "workspace:*",
+    "bullmq": "^5.0.0",
+    "mysql2": "^3.0.0",
+    "sanitize-html": "^2.17.0",
+    "typeorm": "^0.3.0"
+  },
+  "devDependencies": { "@types/node": "^26.6.3", "@types/sanitize-html": "^2.16.0", "tsx": "^4.0.0", "typescript": "^6.0.3" }
+}

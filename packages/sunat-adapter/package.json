@@ -1,0 +1,13 @@
+{
+  "name": "@buzon-sol/sunat-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "lint": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "dependencies": { "@buzon-sol/domain": "workspace:*" },
+  "devDependencies": { "@types/node": "^26.6.3", "tsx": "^4.0.0", "typescript": "^6.0.3" }
+}

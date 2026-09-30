@@ -17,6 +17,12 @@ El formulario envía `POST .../oauth2/j_security_check`. No se especifica aquí 
 
 **Revisión del 30/09/2026, sin registrar secretos:** una consulta HTTP pública del formulario devolvió `200`, encabezados `Set-Cookie` y un formulario `POST` con acción relativa `j_security_check`. El JavaScript de envío copia RUC, usuario y contraseña a campos ocultos; también contempla un campo `captcha` cuando se presenta ese desafío. En una sesión autorizada, el envío manual llegó al menú y al visor. Esto hace razonable probar un cliente HTTP con cookie jar y redirecciones, pero **no prueba** que el login desatendido o las llamadas autenticadas fuera del navegador funcionen; esos pasos siguen pendientes de una prueba específica.
 
+**Control negativo HTTP del 30/09/2026:** `GET /visor/listNotiMenPag` sin sesión devolvió `200`, `application/json` y `rows:null`, tanto sin encabezados adicionales como con `X-Requested-With: XMLHttpRequest`. No se utilizó RUC. Esto confirma que `200` y JSON válido por sí solos no prueban autenticación; el consumidor debe exigir `rows` como arreglo y verificar la cuenta antes de aceptar un inventario. La presencia del campo oculto `captcha` en el HTML no demuestra que haya un desafío activo.
+
+**Prueba HTTP autorizada del 30/09/2026:** con cookie jar nuevo, el `POST j_security_check` redirigió a `e-menu.sunat.gob.pe` y terminó en `200` sin volver al formulario. El HTML final contenía la marca de la cuenta usada, comprobada sin imprimirla. Sin pasar por `/visor/master`, `listNotiMenPag` siguió respondiendo `200 application/json` con `rows:null` incluso con `X-Requested-With` y `X-Ruc`. El login hasta el menú está confirmado en cliente HTTP; el acceso al visor y los listados, todavía no. Esta observación no demuestra que `/visor/master` sea la única dependencia faltante.
+
+En cinco ejecuciones HTTP desde jars nuevos, el menú final tenía `exe=buzon`, pero su HTML no incluía una URL completa de `/visor/master`: se observaron seis iframes sin atributo `src`. Los scripts inline mencionan `cargaBuzon2`, `cargaBuzon` y una asignación de `url` a `iframeApplication`; esto apunta a una navegación posterior, pero no demuestra que ejecutar un navegador sea necesario para el adaptador. No se debe fabricar `hc` ni `token`; falta identificar la solicitud del menú que entrega la URL exacta del visor.
+
 Al entrar en el visor, la web observada pidió el listado y luego abrió automáticamente el detalle del primer registro. Esa llamada puede cambiar un no leído a leído; por tanto el simple acceso a la interfaz no está demostrado como pasivo.
 
 Base de endpoints de visor: `https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor`.
@@ -195,7 +201,7 @@ Además de marcar casillas en la interfaz, `LEIDOS` y `NO_LEIDOS` reordenaron fi
 ## 5. Respuestas que deben considerarse errores
 
 - HTML de login cuando se esperaba JSON: sesión vencida o no autenticada.
-- `200` con JSON sin `rows` de tipo arreglo en `listNotiMenPag`: contrato cambiado o respuesta defectuosa; no equivale a página vacía.
+- `200` con JSON sin `rows` de tipo arreglo en `listNotiMenPag`: puede ser una respuesta sin sesión (control negativo observado con `rows:null`), contrato cambiado o respuesta defectuosa; no equivale a página vacía.
 - `200` con `rows=[]` en una página: candidato a final; confirmar según la política de paginación del diseño.
 - `500`/HTML en descarga o `Content-Type` incompatible: descarga fallida; no crear archivo válido.
 - `updateLeido=true` sin cambio inmediato en el siguiente listado: esperar y reconciliar, no asumir que falló al primer intento.
