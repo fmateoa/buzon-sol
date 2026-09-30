@@ -38,6 +38,7 @@ test("invalid MIME is not stored; codArchivo zero stays scoped by item and accou
     response = { status: 200, contentType: "text/html", bytes: Buffer.from("<p>Ficticio</p><script>bad()</script>"), verifiedGeneratedDocument: true };
     await processor.process(accountId, generatedId);
     assert.equal(stored.get(`${accountId}/${firstItem}/${generatedId}`)?.includes(Buffer.from("<script>")), false);
+    assert.equal(stored.get(`${accountId}/${firstItem}/${generatedId}.original`)?.includes(Buffer.from("<script>")), true);
     const assets: { state: string; sha256: string; size_bytes: string }[] = await db.query(
       "SELECT state,sha256,size_bytes FROM file_assets WHERE account_id=? ORDER BY item_id", [accountId]);
     assert.equal(assets.every((asset) => asset.state === "stored" && asset.sha256.length === 64 && Number(asset.size_bytes) > 0), true);

@@ -1,6 +1,10 @@
 # API y worker backend
 
+<<<<<<< HEAD
 La API tiene autenticación propia, roles, usuarios, cuentas cifradas, consultas persistidas y comandos asíncronos. El worker ejecuta inventarios, lecturas, pruebas de conexión y descargas con clientes SUNAT inyectados; hoy solo existen clientes de prueba. Su proceso principal no inicia sesiones SUNAT reales: el transporte sigue `NO_VALIDADO` según el [plan de integración](../../specs/buzon-sol/plan/sunat-integration.md). El frontend aún usa su adaptador local. El avance por hito está en el [seguimiento del plan backend](../../specs/buzon-sol/plan/backend.md#seguimiento-de-avance).
+=======
+La API tiene autenticación propia, roles, usuarios, cuentas cifradas, consultas persistidas y comandos asíncronos. El worker tiene integrado un cliente HTTP para probar la conexión SOL y ejecutar inventarios, lecturas explícitas y archivos cuando sus respectivas puertas de validación estén habilitadas. El transporte para inventario productivo sigue `NO_VALIDADO` según el plan de integración. El frontend aún usa su adaptador local.
+>>>>>>> 46cdc85e8eb7b709969c3920163453507626d844
 
 ## Stack de desarrollo
 
@@ -9,6 +13,7 @@ node scripts/dev-env.mjs
 docker compose -f compose.dev.yml -p buzon-dev up -d --build
 ```
 
+<<<<<<< HEAD
 `dev-env.mjs` genera `.env.dev` (ignorado por git) con contraseñas locales aleatorias, un par RSA de desarrollo y la clave de huellas. El Compose levanta MySQL 8.4, Redis 7.4 con AOF, MinIO con bucket privado `buzon`, un servicio `migrate` que aplica migraciones y termina, la API en `127.0.0.1:38080` y el worker. Ninguna puerta `SUNAT_*` está activa. MinIO usa `bitnamilegacy/minio:2025.5.24`, una compilación comunitaria sin mantenimiento: sirve para desarrollo local; producción necesita un S3 compatible con soporte. La imagen oficial `minio/minio` no está disponible en Docker Hub.
 
 ## Configuración
@@ -16,6 +21,10 @@ docker compose -f compose.dev.yml -p buzon-dev up -d --build
 MySQL 8 con base `buzon_sol`. Variables: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`; `API_PORT` para HTTP. La API necesita `SOL_PUBLIC_KEY_PEM`, `SOL_KEY_ID` y `ACCOUNT_FINGERPRINT_KEY_B64` (32 bytes aleatorios en base64, estable entre reinicios). Solo el worker recibe la clave privada RSA (`SOL_PRIVATE_KEY_PEM`). Las claves se entregan por el mecanismo de secretos del despliegue, nunca en el repositorio.
 
 Redis usa `REDIS_URL`. Los archivos usan `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY` y `S3_SECRET_KEY`; el bucket debe ser privado. La API entrega archivos mediante un proxy autenticado, de modo que una URL copiada pierde acceso inmediatamente después de revocar el permiso. El SDK se verificó contra S3Mock y contra MinIO, incluido que un GET anónimo recibe `403`.
+=======
+Redis usa `REDIS_URL`. Los archivos usan `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY` y `S3_SECRET_KEY`; el bucket debe ser privado. La API entrega archivos mediante un proxy autenticado, de modo que una URL copiada pierde acceso inmediatamente después de revocar el permiso. Se verificó el SDK contra S3Mock. La imagen comunitaria de MinIO no estuvo disponible en los registros probados y AIStor sin licencia rechazó operaciones S3; falta validar un despliegue MinIO autorizado. El endpoint configurable permite conectar ese despliegue sin cambiar código.
+Para documentos HTML generados, el worker conserva además los bytes originales en una clave privada con sufijo `.original`. La API solo entrega la copia saneada con descarga forzada y CSP `sandbox`.
+>>>>>>> 46cdc85e8eb7b709969c3920163453507626d844
 
 Desde la raíz:
 
@@ -39,9 +48,17 @@ Administración: `GET/POST /roles`, `PATCH /roles/:id`, `GET/POST /users`, `PATC
 
 Buzón: `GET /accounts`, `GET /accounts/:id/mail` (devuelve `{rows,total,offset,limit}` con metadatos persistidos; filtros `box`, `state`, `review`, `q`, `dateFrom`/`dateTo` como días de `America/Lima`, `folder`, `label`, orden `sort`/`direction`, paginación `offset` ≥ 0 y `limit` de 1 a 200), `GET /accounts/:id/folders` y `GET /accounts/:id/labels` (último catálogo observado y resultado del último intento), `GET /accounts/:id/summary`, `GET /accounts/:id/activity`, `POST /accounts/:id/inventory`, `POST /accounts/:id/runs/:runId/resume`, `POST /accounts/:id/items/:itemId/read` con `Idempotency-Key`, `GET /accounts/:id/items/:itemId/detail`, `PATCH /accounts/:id/items/:itemId/review` con `{ "reviewed": true|false }`, `POST /accounts/:id/files/:fileId/fetch`, `GET /accounts/:id/files/:fileId/fetches/:fetchId`, `GET /accounts/:id/files/:fileId`, `GET/PATCH /accounts/:id/schedule`. La obtención de un archivo por usuario requiere una lectura explícita completada. El estado `reviewed` es privado del usuario y jamás llama a SUNAT. Auditoría y avisos: `GET /audit`, `GET /audit.csv`, `GET /notices` (con `counts` solo numéricos), `POST /notices/:id/read`. Cada ruta vuelve a comprobar permiso y cuenta.
 
+<<<<<<< HEAD
 ## Puertas SUNAT
 
 Cada puerta se activa únicamente cuando exista el cliente apropiado y se supere la prueba correspondiente del plan de integración. Nunca fijarlas para simular una validación en un entorno real.
+=======
+Las programaciones activas y los comandos remotos están bloqueados hasta validar el transporte SUNAT. El inventario manual requiere `SUNAT_TRANSPORT_VALIDATED=true`, la lectura `SUNAT_READ_VALIDATED=true`, la prueba de conexión `SUNAT_CONNECTION_CLIENT_READY=true` y la obtención de archivos `SUNAT_FILE_CLIENT_READY=true`. Configurar cada puerta únicamente cuando se superen las pruebas remotas correspondientes. El inventario continúa bloqueado por S-04/S-05/S-06 del [informe de fase A](../../specs/buzon-sol/sunat/phase-a-report-2026-09-30.md); lectura y archivos exigen además las pruebas de fase C. Para arrancar el worker se requiere `ENABLE_SUNAT_JOBS=true`, la configuración MySQL/Redis y `SOL_PRIVATE_KEY_PEM` para descifrar credenciales. `SUNAT_CRON_VALIDATED` debe permanecer desactivado. Nunca fijar esas variables para simular una validación en un entorno real.
+
+La exploración autorizada usa `scripts/sunat-test-credential.ps1` para recibir la credencial con entrada oculta y guardarla cifrada con DPAPI para el usuario local. `scripts/run-sunat-probe.ps1 -Mode <modo>` acepta `connection`, `passive-check`, `relogin-check`, `logout-check`, `dependency-check`, `inventory-check`, `catalog-check`, `read-safe-check`, `files-safe-check`, `expiry-idle` o `expiry-active`; los dos últimos aceptan `-Minutes 1..180` y prueban vencimiento con inactividad o actividad. Las sondas `read-safe-check` y `files-safe-check` solo abren elementos que el listado ya presenta como leídos. Solo emiten resultados redactados. El archivo local se elimina con `scripts/sunat-test-credential.ps1 -Delete` al terminar las pruebas. No copiar credenciales al chat ni a archivos del repositorio.
+
+El módulo `apps/worker/src/scheduler.ts` implementa una pasada del programador con vencimientos persistidos, bloqueo de cuenta y avance de horario Lima. El proceso principal ejecuta pasadas cada 30 segundos solo con `SUNAT_CRON_VALIDATED=true` y `SUNAT_TRANSPORT_VALIDATED=true`; ambas puertas siguen desactivadas hasta cumplir las pruebas remotas.
+>>>>>>> 46cdc85e8eb7b709969c3920163453507626d844
 
 | Variable | Habilita | Prueba que la respalda |
 |---|---|---|

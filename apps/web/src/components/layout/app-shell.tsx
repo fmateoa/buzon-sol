@@ -1,10 +1,11 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "lizaui/button";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, Moon, Sun } from "lucide-react";
 import type { AccountId, MailBox } from "@/domain/types";
 import { cn } from "@/lib/cn";
 import { can } from "@/lib/permissions";
 import { formatCount } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
 import { describeConnection, tagColor, TONE_TEXT } from "@/components/custom/status";
 import { AccountSelector } from "@/features/accounts/account-selector";
 import { preferredAccount, useRouteAccountId } from "@/features/accounts/account-guard";
@@ -21,6 +22,17 @@ const useUnreadCounts = (accountId: AccountId | null) => {
 	return { messages: summary.data.boxes.messages.unreadInSunat, notifications: summary.data.boxes.notifications.unreadInSunat };
 };
 
+/** Cambio rápido claro/oscuro. La preferencia completa (incluido «Sistema») está en Perfil. */
+const ThemeToggle = () => {
+	const { resolved, setPreference } = useTheme();
+	const next = resolved === "dark" ? "light" : "dark";
+	return (
+		<Button size="sm" variant="light" isIconOnly aria-label={next === "dark" ? "Usar tema oscuro" : "Usar tema claro"} onClick={() => setPreference(next)} className="size-11 min-w-11">
+			{next === "dark" ? <Moon className="size-4" aria-hidden="true" /> : <Sun className="size-4" aria-hidden="true" />}
+		</Button>
+	);
+};
+
 const NavEntry = ({ item, count, variant }: { item: NavItem; count?: number | undefined; variant: "full" | "rail" }) => (
 	<NavLink
 		to={item.to}
@@ -29,7 +41,7 @@ const NavEntry = ({ item, count, variant }: { item: NavItem; count?: number | un
 			cn(
 				"flex items-center rounded-md text-sm transition-colors",
 				variant === "full" ? "min-h-10 justify-between gap-2 px-2.5 py-2" : "size-11 justify-center",
-				isActive ? "bg-white font-semibold text-brand shadow-[inset_0_0_0_1px_#C9D3DE]" : "text-ink-2 hover:bg-white/70",
+				isActive ? "bg-paper font-semibold text-brand shadow-[inset_0_0_0_1px_var(--bz-brand-line)]" : "text-ink-2 hover:bg-paper/70",
 			)
 		}
 		aria-label={variant === "rail" ? `${item.label}${count ? `, ${count} no leídos` : ""}` : undefined}
@@ -50,7 +62,7 @@ const NavEntry = ({ item, count, variant }: { item: NavItem; count?: number | un
 		) : (
 			<span className="relative">
 				<item.icon className="size-5" aria-hidden="true" />
-				{count ? <span aria-hidden="true" className="absolute -top-1.5 -right-2 rounded-full bg-brand px-1 text-[10px] leading-4 font-semibold text-white">{count}</span> : null}
+				{count ? <span aria-hidden="true" className="absolute -top-1.5 -right-2 rounded-full bg-brand-fill px-1 text-[10px] leading-4 font-semibold text-white">{count}</span> : null}
 			</span>
 		)}
 	</NavLink>
@@ -66,7 +78,7 @@ const FolderAndTagLinks = ({ accountId, box }: { accountId: AccountId; box: Mail
 				<SectionLabel>Carpetas</SectionLabel>
 				{folders.data && folders.data.length === 0 && <p className="px-2.5 text-[13px] text-subtle-ink">Esta cuenta no tiene carpetas propias.</p>}
 				{folders.data?.map((f) => (
-					<Link key={f.code} to={`${base}?carpeta=${encodeURIComponent(f.code)}`} className="flex justify-between rounded px-2.5 py-1 text-[13px] text-ink-2 hover:bg-white/70">
+					<Link key={f.code} to={`${base}?carpeta=${encodeURIComponent(f.code)}`} className="flex justify-between rounded px-2.5 py-1 text-[13px] text-ink-2 hover:bg-paper/70">
 						<span>
 							{f.name}
 							{f.locked && <span className="sr-only"> (carpeta protegida)</span>}
@@ -78,7 +90,7 @@ const FolderAndTagLinks = ({ accountId, box }: { accountId: AccountId; box: Mail
 			<div className="flex flex-col gap-1">
 				<SectionLabel>Etiquetas SUNAT</SectionLabel>
 				{tags.data?.map((t) => (
-					<Link key={t.code} to={`${base}?etiqueta=${encodeURIComponent(t.code)}`} className="flex items-center gap-2 rounded px-2.5 py-1 text-[13px] text-ink-2 hover:bg-white/70" title={t.name}>
+					<Link key={t.code} to={`${base}?etiqueta=${encodeURIComponent(t.code)}`} className="flex items-center gap-2 rounded px-2.5 py-1 text-[13px] text-ink-2 hover:bg-paper/70" title={t.name}>
 						<span aria-hidden="true" className={cn("size-2 shrink-0 rounded-[2px]", !t.known && "outline outline-1 outline-dashed outline-foreground-400")} style={{ background: tagColor(t) }} />
 						<span className="truncate">{t.name}</span>
 						{!t.known && <span className="sr-only"> (etiqueta nueva)</span>}
@@ -95,7 +107,7 @@ const ConnectionCard = ({ accountId }: { accountId: AccountId }) => {
 	if (!account) return null;
 	const view = describeConnection(account.connection);
 	return (
-		<Link to={`/c/${accountId}/actividad`} className="flex flex-col gap-1 rounded-lg border border-line bg-white px-3 py-2.5 hover:border-line-strong">
+		<Link to={`/c/${accountId}/actividad`} className="flex flex-col gap-1 rounded-lg border border-line bg-paper px-3 py-2.5 hover:border-line-strong">
 			<span className={cn("flex items-center gap-2 text-[13px] font-semibold", TONE_TEXT[view.tone])}>
 				<span className={cn("mono", view.icon === "↻" && "inline-block motion-safe:animate-spin")} aria-hidden="true">
 					{view.icon}
@@ -117,7 +129,7 @@ const Sidebar = ({ accountId, box, variant }: { accountId: AccountId | null; box
 	return (
 		<nav aria-label="Navegación principal" className={cn("flex h-full flex-col gap-5 overflow-y-auto border-r border-line bg-surface", full ? "w-[232px] px-3.5 py-5" : "w-[76px] items-center px-2 py-4")}>
 			<Link to="/" className={cn("flex items-center gap-2.5", full ? "px-2" : "justify-center")} aria-label="buzon-sol, inicio">
-				<span aria-hidden="true" className="size-[22px] shrink-0 rounded-[5px] bg-brand" />
+				<span aria-hidden="true" className="size-[22px] shrink-0 rounded-[5px] bg-brand-fill" />
 				{full && <span className="text-base font-bold tracking-tight text-ink">buzon-sol</span>}
 			</Link>
 
@@ -163,9 +175,12 @@ const Sidebar = ({ accountId, box, variant }: { accountId: AccountId | null; box
 						{session.user.roleName}
 					</span>
 				)}
-				<Button size="sm" variant="light" isIconOnly aria-label="Cerrar sesión de buzon-sol" onClick={() => logout.mutate()} className="size-11 min-w-11">
-					<LogOut className="size-4" aria-hidden="true" />
-				</Button>
+				<div className={cn("flex shrink-0", !full && "flex-col")}>
+					<ThemeToggle />
+					<Button size="sm" variant="light" isIconOnly aria-label="Cerrar sesión de buzon-sol" onClick={() => logout.mutate()} className="size-11 min-w-11">
+						<LogOut className="size-4" aria-hidden="true" />
+					</Button>
+				</div>
 			</div>
 		</nav>
 	);
@@ -183,7 +198,7 @@ const MobileBottomBar = ({ accountId }: { accountId: AccountId | null }) => {
 		{ key: "mas", label: "Más", short: "Más", to: "/mas", count: undefined },
 	];
 	return (
-		<nav aria-label="Navegación inferior" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-white pb-[env(safe-area-inset-bottom)]">
+		<nav aria-label="Navegación inferior" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-paper pb-[env(safe-area-inset-bottom)]">
 			{items.map((item) => (
 				<NavLink
 					key={item.key}
@@ -210,8 +225,8 @@ const MobileHeader = ({ accountId }: { accountId: AccountId | null }) => {
 	const account = session.visibleAccounts.find((a) => a.id === accountId);
 	const view = account ? describeConnection(account.connection) : null;
 	return (
-		<header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-white/95 px-4 py-2 backdrop-blur">
-			<span aria-hidden="true" className="size-5 shrink-0 rounded-[5px] bg-brand" />
+		<header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-paper/95 px-4 py-2 backdrop-blur">
+			<span aria-hidden="true" className="size-5 shrink-0 rounded-[5px] bg-brand-fill" />
 			<div className="min-w-0 flex-1">
 				<p className="truncate text-sm font-semibold text-ink">{account?.alias ?? "buzon-sol"}</p>
 				{view && (
@@ -243,9 +258,10 @@ export const AppShell = () => {
 	const isDesktop = useIsDesktop();
 	const isMobile = useIsMobile();
 
+	// Diseño: barra lateral gris (`bg-surface`) y área de contenido blanca.
 	return (
-		<div className="flex min-h-dvh bg-background">
-			<a href="#contenido" className="sr-only z-50 rounded bg-white px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
+		<div className="flex min-h-dvh bg-paper">
+			<a href="#contenido" className="sr-only z-50 rounded bg-paper px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
 				Saltar al contenido
 			</a>
 			{!isMobile && (

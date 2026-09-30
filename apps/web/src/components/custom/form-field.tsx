@@ -56,7 +56,7 @@ export const TextField = ({
 				isErrorText={false}
 				aria-describedby={describedBy}
 				aria-required={required || undefined}
-				className="bg-white"
+				className="bg-paper dark:bg-paper"
 			/>
 			{hint && (
 				<p id={`${id}-hint`} className="text-xs text-muted-ink">

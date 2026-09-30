@@ -17,7 +17,9 @@ interface ResponsiveDialogProps {
 }
 
 /**
- * Diálogo basado en lizaui: `Modal` en escritorio/tablet y `Drawer` inferior en móvil.
+ * Diálogo de confirmación basado en lizaui: `Modal` en escritorio/tablet y `Drawer` inferior flotante en móvil,
+ * ambos con fondo difuminado (`backdrop="blur"`), igual que los paneles de gestión (`SideSheet`).
+ * Los formularios de alta/edición usan `SideSheet`; este componente queda para decisiones cortas.
  * `Modal` no mueve el foco por sí mismo: se enfoca el cuerpo al abrir y se devuelve el
  * foco al elemento que lo abrió al cerrar.
  */
@@ -42,9 +44,9 @@ export const ResponsiveDialog = ({ open, onClose, title, children, footer, size 
 
 	if (isMobile && sheetOnMobile) {
 		return (
-			<Drawer isOpen={open} onClose={close} placement="bottom" size="lg" isDismissable={!dismissDisabled} isKeyboardDismissDisabled={dismissDisabled} closeButtonLabel="Cerrar">
+			<Drawer isOpen={open} onClose={close} placement="bottom" size="lg" isFloating backdrop="blur" isDismissable={!dismissDisabled} isKeyboardDismissDisabled={dismissDisabled} isDragDismissDisabled={dismissDisabled} closeButtonLabel="Cerrar">
 				<DrawerContent>
-					<DrawerHeader>
+					<DrawerHeader className="pt-7">
 						<DrawerTitle className="pr-8 text-lg font-semibold text-ink">{title}</DrawerTitle>
 					</DrawerHeader>
 					<DrawerBody>
@@ -59,7 +61,7 @@ export const ResponsiveDialog = ({ open, onClose, title, children, footer, size 
 	}
 
 	return (
-		<Modal modalId={id} isShow={open} isVisible={open} onClickOutside={close} isKeyboardDismissDisabled={dismissDisabled} size={size} placement="center">
+		<Modal modalId={id} isShow={open} isVisible={open} onClickOutside={close} isKeyboardDismissDisabled={dismissDisabled} size={size} placement="center" backdrop="blur">
 			<ModalHeader title={title} onClick={close} disabled={dismissDisabled} className="pr-14 text-ink" />
 			{open && (
 				<ModalBody>

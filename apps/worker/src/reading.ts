@@ -6,6 +6,7 @@ import { AppError, type MailBox } from "@buzon-sol/domain";
 export interface ReadClient {
   readDetail(box: MailBox, codMensaje: string): Promise<{
     body: string;
+    indTexto?: string | null;
     updateLeido: boolean | null;
     files?: { kind: "attachment" | "generated_document"; codArchivo: number | string | null;
       numId?: string | null; name?: string | null }[];
@@ -54,13 +55,19 @@ export class ReadProcessor {
       const box: MailBox = event.tipo_msj === 1 ? "messages" : "notifications";
       try {
         const detail = await this.client.readDetail(box, event.cod_mensaje);
-        const safeBody = sanitizeHtml(detail.body, {
-          allowedTags: ["p", "br", "b", "strong", "i", "em", "u", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "a", "div", "span"],
-          allowedAttributes: {},
-        });
+        const safeBody = detail.indTexto === "3" ? `<pre>${escapeHtml(normalizeJson(detail.body))}</pre>` :
+          detail.indTexto && detail.indTexto !== "1" ? `<pre>${escapeHtml(detail.body)}</pre>` :
+            sanitizeHtml(detail.body, {
+              allowedTags: ["p", "br", "b", "strong", "i", "em", "u", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "a", "div", "span"],
+              allowedAttributes: {},
+            });
         let observed: number | null = null;
-        try { observed = await this.client.observeState(box, event.cod_mensaje); }
-        catch { /* The remote transition is unconfirmed; preserve the fetched body. */ }
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try { observed = await this.client.observeState(box, event.cod_mensaje); }
+          catch { break; /* The remote transition is unconfirmed; preserve the fetched body. */ }
+          if (event.ind_estado !== 0 || detail.updateLeido !== true || observed !== 0) break;
+          if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
         await this.db.transaction(async (manager) => {
           await manager.query(
             `INSERT INTO mail_details (item_id,account_id,original_body,safe_body)
@@ -94,4 +101,14 @@ export class ReadProcessor {
       await lease.release();
     }
   }
+}
+
+function normalizeJson(body: string): string {
+  try { return JSON.stringify(JSON.parse(body), null, 2); }
+  catch { return body; }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;" })[char]!);
 }

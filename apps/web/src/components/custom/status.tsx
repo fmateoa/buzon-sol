@@ -10,9 +10,9 @@ import { INVENTORY_EFFECT_LABEL } from "@/lib/sunat-gates";
 
 const REMOTE: Record<RemoteReadState, { icon: string; long: string; short: string; className: string }> = {
 	unread: { icon: "●", long: "No leído en SUNAT", short: "No leído", className: "text-brand bg-brand-soft border-brand-line" },
-	confirming: { icon: "↻", long: "Confirmando lectura con SUNAT…", short: "Confirmando…", className: "text-brand bg-white border-brand-line" },
-	read: { icon: "✓", long: "Leído en SUNAT", short: "Leído", className: "text-ok bg-ok-soft border-[#c4e2cf]" },
-	unconfirmed: { icon: "!", long: "SUNAT aún no confirma la lectura", short: "Sin confirmar", className: "text-effect-ink bg-effect-soft border-[#f3d18f]" },
+	confirming: { icon: "↻", long: "Confirmando lectura con SUNAT…", short: "Confirmando…", className: "text-brand bg-paper border-brand-line" },
+	read: { icon: "✓", long: "Leído en SUNAT", short: "Leído", className: "text-ok bg-ok-soft border-ok-line" },
+	unconfirmed: { icon: "!", long: "SUNAT aún no confirma la lectura", short: "Sin confirmar", className: "text-effect-ink bg-effect-soft border-effect-line" },
 };
 
 export const RemoteStatePill = ({ state, variant = "long", className }: { state: RemoteReadState; variant?: "long" | "short"; className?: string }) => {
@@ -52,7 +52,7 @@ export const RemoteStateDot = ({ state }: { state: RemoteReadState }) => {
 export const ReviewTag = ({ reviewed, className }: { reviewed: boolean; className?: string }) => (
 	<span
 		className={cn(
-			"inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-xs font-medium whitespace-nowrap bg-white",
+			"inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-xs font-medium whitespace-nowrap bg-paper",
 			reviewed ? "border-ok text-ok" : "border-line-strong text-muted-ink",
 			className,
 		)}
@@ -71,7 +71,7 @@ export const RemoteEffectBadge = ({ className, children = "Puede marcar como le�
 );
 
 export const NoContentBadge = ({ className }: { className?: string }) => (
-	<span className={cn("inline-flex items-center gap-1.5 rounded-sm border border-[#c4e2cf] bg-ok-soft px-2 py-0.5 text-xs font-semibold text-ok whitespace-nowrap", className)}>
+	<span className={cn("inline-flex items-center gap-1.5 rounded-sm border border-ok-line bg-ok-soft px-2 py-0.5 text-xs font-semibold text-ok whitespace-nowrap", className)}>
 		<span aria-hidden="true">✓</span>
 		{INVENTORY_EFFECT_LABEL}
 	</span>
@@ -95,7 +95,7 @@ export const TagChip = ({ tag, className }: { tag: SunatTag | null; className?: 
 		<span
 			className={cn(
 				"inline-flex max-w-[16rem] items-center gap-1.5 rounded-sm border px-1.5 py-0.5 text-xs text-ink-2",
-				tag.known ? "border-line bg-white" : "border-dashed border-line-strong bg-surface",
+				tag.known ? "border-line bg-paper" : "border-dashed border-line-strong bg-surface",
 				className,
 			)}
 			title={tag.name}

@@ -5,6 +5,18 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="robots" content="noindex" />
 		<title>buzon-sol</title>
+		<!-- Tema antes del primer pintado (misma lógica que src/lib/theme.ts): evita el destello claro en modo oscuro. -->
+		<script>
+			(function () {
+				var pref = null;
+				try {
+					pref = localStorage.getItem("buzon-sol:tema");
+				} catch (e) {}
+				var dark = pref === "dark" || (pref !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+				document.documentElement.classList.toggle("dark", dark);
+				document.documentElement.style.colorScheme = dark ? "dark" : "light";
+			})();
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>
