@@ -11,11 +11,12 @@ afterEach(() => {
 // Ancho de escritorio por defecto (1280 px); las pruebas móviles lo cambian.
 Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 });
 
-// matchMedia mínimo: evalúa (min-width: Npx) / (max-width: Npx) contra innerWidth.
+// matchMedia mínimo: evalúa (min-width: Npx) / (max-width: Npx) contra innerWidth. Cualquier otra
+// consulta (p. ej. prefers-color-scheme: dark) no coincide: el «sistema» de las pruebas usa tema claro.
 window.matchMedia = (query: string) => {
 	const min = /min-width:\s*(\d+)px/.exec(query);
 	const max = /max-width:\s*(\d+)px/.exec(query);
-	const matches = (!min || window.innerWidth >= Number(min[1])) && (!max || window.innerWidth <= Number(max[1]));
+	const matches = Boolean(min || max) && (!min || window.innerWidth >= Number(min[1])) && (!max || window.innerWidth <= Number(max[1]));
 	return {
 		matches,
 		media: query,

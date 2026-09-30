@@ -10,7 +10,7 @@ import { can } from "@/lib/permissions";
 import { useAppSession, useLogout } from "./use-session";
 
 const LinkList = ({ title, items }: { title: string; items: NavItem[] }) => (
-	<section aria-label={title} className="rounded-lg border border-line bg-white">
+	<section aria-label={title} className="rounded-lg border border-line bg-paper">
 		<h2 className="px-4 pt-3 pb-1 text-[11px] font-semibold tracking-[0.08em] text-subtle-ink uppercase">{title}</h2>
 		<ul>
 			{items.map((item) => (
@@ -36,7 +36,7 @@ export const MorePage = () => {
 		<div className="flex flex-col gap-4">
 			<PageHeader title="Más" description={`${session.user.name} · ${session.user.roleName}`} />
 			{account && (
-				<section aria-label="Cuenta SUNAT" className="flex flex-col gap-2 rounded-lg border border-line bg-white p-4">
+				<section aria-label="Cuenta SUNAT" className="flex flex-col gap-2 rounded-lg border border-line bg-paper p-4">
 					<AccountSelector activeId={account.id} />
 					<ConnectionBadge connection={account.connection} withSub />
 				</section>

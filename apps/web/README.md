@@ -11,7 +11,7 @@ pnpm install
 pnpm dev          # http://localhost:5173
 pnpm typecheck    # tsc -b --noEmit
 pnpm lint         # eslint
-pnpm test         # vitest (48 pruebas)
+pnpm test         # vitest (51 pruebas)
 pnpm build        # tsc -b && vite build
 ```
 
@@ -64,12 +64,15 @@ Las claves de caché cuelgan de `["account", accountId]`: una respuesta tardía 
 La referencia visual se tomó del [artefacto UX/UI compartido](https://claude.ai/artifact/9xRxtR7WAqdSRb4zA2zwyD) (el MCP `claude_design` no estaba disponible en esta sesión). Diferencias deliberadas o no comprobadas:
 
 - **Copy de inventario**: el diseño dice «✓ Sin efecto en SUNAT»; se muestra «✓ El barrido no abre contenido» + nota del inicio de sesión (UX §5, G-02).
+- **Programador (A3)**: el interruptor «Programador activo» es un selector Activo / Pausado / Desactivado (la spec A3 pide los tres estados) y el horario usa dos campos de hora. La nota «!» del inicio de sesión va dentro de la aceptación administrativa.
+- **Acceso de usuario (A5)**: como en el diseño, al editar solo se cambian estado y rol; nombre y correo van en la cabecera del panel. Una invitación pendiente no se puede «activar» desde el panel.
+- **Cuenta (A2)**: el panel se abre desde «Gestionar» y «Actualizar credencial»; tras reemplazar la Clave SOL sigue abierto para «Probar conexión…». La página de la cuenta conserva sus tres pestañas.
 - **Destacado y urgente** se muestran solo como indicadores de SUNAT (`indDesta`, `indUrg`); no hay acciones de destacar ni de urgencia.
 - **Bandeja**: filtros en barra superior (diseño D5) en lugar de `Table.SearchRow`; las tablas de gestión (Cuentas, Usuarios, Roles, Auditoría) sí usan `SearchRow`. Navegación ↑/↓ + Intro no implementada: cada fila tiene un botón «Ver» tabulable (UX §3).
 - **Descargas**: estado «Guardado en el espacio de la cuenta» sin botón «Abrir» (no hay almacén real). «Cancelar descarga» no implementado.
 - **Correo resumen diario** deshabilitado con nota P-02. Descarga automática de adjuntos leídos condicionada a P-03.
 - **Actividad programada global** y **Auditoría** son de solo lectura; el filtro de fecha de auditoría es por rango relativo.
-- **Modo oscuro** no implementado: el diseño solo define tema claro.
+- **Modo oscuro**: el diseño solo define el tema claro. El oscuro se derivó de su paleta (misma jerarquía; ámbar solo para efecto en SUNAT; contraste AA comprobado) y usa la clase `.dark` de lizaui en `<html>`. Preferencia Sistema / Claro / Oscuro en Perfil y cambio rápido en la barra lateral; se guarda solo en el navegador (`lib/theme.ts`) y un script de `index.html` la aplica antes de pintar. Los colores de la app son tokens `--bz-*` (`index.css`): no usar `bg-white` ni hex sueltos, sino `bg-paper`, `bg-brand-fill` (relleno bajo texto blanco), `border-ok-line`, etc. El cuerpo remoto de SUNAT sigue el tema porque sus estilos se eliminan al sanear.
 - Cifras, horarios y nombres del diseño son muestras; los fixtures los reproducen aproximadamente.
 
 Notas de integración con lizaui 12.0.10 (verificadas contra los `.d.ts` y el código de referencia):
@@ -78,7 +81,9 @@ Notas de integración con lizaui 12.0.10 (verificadas contra los `.d.ts` y el c�
 - `Pagination` muestra «página - límite de total»; se oculta su selector (`isLimitSelect={false}`) y se usa un resumen propio («N registros · Mostrando a–b») con selector 10/20/50/100.
 - `Button` reenvía props desconocidas al DOM y `isLoading` no bloquea el clic: se usa `disabled` y clases (`w-full`) en vez de `fullWidth`/`isDisabled`.
 - `Input` no asocia el texto de error: `components/custom/form-field.tsx` lo enlaza con `aria-describedby` y enfoca el primer error.
-- `Modal` no mueve el foco: `ResponsiveDialog` enfoca el cuerpo al abrir y devuelve el foco al cerrar; en móvil se usa `Drawer` inferior.
+- **Paneles de gestión** (`components/custom/side-sheet.tsx`): alta y edición de cuenta (A2), usuario (A5) y rol (A4) usan `Drawer` con `isFloating` y `backdrop="blur"`, a la derecha en escritorio/tablet y como hoja inferior en móvil. `SheetForm`/`SheetBody`/`SheetFooter` dejan el pie fijo dentro del `<form>` (el `Button` de lizaui no tipa el atributo `form`), y el mismo formulario de cuenta se reutiliza en la pestaña «Datos y credencial».
+- `Drawer` y `Modal` no mueven el foco: `SideSheet` y `ResponsiveDialog` enfocan el panel al abrir y devuelven el foco al cerrar. `ResponsiveDialog` queda para confirmaciones cortas, con `backdrop="blur"` y hoja inferior flotante en móvil.
+- `TabsList`/`TabsTrigger` de lizaui solo tienen estilo de píldora: `components/custom/underline-tabs.tsx` los muestra subrayados como en A3. `Segmented` es un grupo de radios propio (lizaui no trae control segmentado con semántica de radio).
 - El CSS de componentes (`dist/lizaui.css`) no está en el mapa `exports`: se importa por ruta relativa en `index.css`, junto con `@source` al `dist` real.
 - El bundle principal supera 500 kB (aviso de Vite); la administración ya se carga de forma diferida.
 

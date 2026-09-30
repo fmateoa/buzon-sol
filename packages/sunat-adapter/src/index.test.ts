@@ -50,7 +50,7 @@ test("HTML, rows null and page guardrail never become a successful empty mailbox
   assert.throws(() => parseInventoryPage({ contentType: "text/html", body: "<html>login</html>" }, "messages"),
     (error) => error instanceof AppError && error.code === "remote_session_expired");
   assert.throws(() => parseInventoryPage({ contentType: "application/json", body: '{"rows":null}' }, "messages"),
-    (error) => error instanceof AppError && error.code === "schema_changed");
+    (error) => error instanceof AppError && error.code === "remote_session_expired");
   await assert.rejects(scanBox({ listPage: async () => json([{ codMensaje: 1, indEstado: 0 }]) },
     "messages", async () => {}, 1, 2),
     (error) => error instanceof AppError && error.code === "incomplete_inventory");

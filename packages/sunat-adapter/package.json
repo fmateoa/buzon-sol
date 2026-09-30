@@ -3,11 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "commonjs",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
     "test": "node --import tsx --test src/*.test.ts"
   },
-  "dependencies": { "@buzon-sol/domain": "workspace:*" },
-  "devDependencies": { "@types/node": "^26.6.3", "tsx": "^4.0.0", "typescript": "^6.0.3" }
+  "dependencies": {
+    "@buzon-sol/domain": "workspace:*",
+    "tough-cookie": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.3"
+  }
 }

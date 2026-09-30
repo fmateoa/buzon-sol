@@ -14,7 +14,7 @@ export const PageHeader = ({ title, description, actions, back, className }: { t
 );
 
 export const Section = ({ title, children, actions, className, headingId }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; headingId?: string }) => (
-	<section aria-labelledby={headingId} className={cn("rounded-lg border border-line bg-white p-4 md:p-5", className)}>
+	<section aria-labelledby={headingId} className={cn("rounded-lg border border-line bg-paper p-4 md:p-5", className)}>
 		{(title || actions) && (
 			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
 				{title && (

@@ -43,10 +43,10 @@ export const LoginPage = () => {
 		<main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
 			<div className="w-full max-w-[400px]">
 				<div className="mb-6 flex items-center gap-2.5">
-					<span aria-hidden="true" className="size-[26px] rounded-[6px] bg-brand" />
+					<span aria-hidden="true" className="size-[26px] rounded-[6px] bg-brand-fill" />
 					<span className="text-lg font-bold tracking-tight text-ink">buzon-sol</span>
 				</div>
-				<div className="rounded-xl border border-line bg-white p-6 shadow-small">
+				<div className="rounded-xl border border-line bg-paper p-6 shadow-small">
 					<h1 className="text-xl font-bold text-ink">Ingresar</h1>
 					<p className="mt-1 text-sm text-muted-ink">Use su cuenta de buzon-sol asignada por el administrador.</p>
 					<Formik<LoginValues> initialValues={{ email: "", password: "" }} validationSchema={schema} onSubmit={submit}>
@@ -73,6 +73,7 @@ export const LoginPage = () => {
 									error={errors.email}
 									touched={touched.email || submitCount > 0}
 									autoFocus
+									className="bg-paper dark:bg-paper"
 								/>
 								<Input
 									id="password"
@@ -86,6 +87,7 @@ export const LoginPage = () => {
 									onBlur={handleBlur}
 									error={errors.password}
 									touched={touched.password || submitCount > 0}
+									className="bg-paper dark:bg-paper"
 								/>
 								<Button type="submit" color="primary" size="lg" className="w-full" isLoading={isSubmitting} disabled={isSubmitting}>
 									Ingresar
@@ -108,7 +110,7 @@ export const LoginPage = () => {
 const PrototypeUsers = () => {
 	if (import.meta.env.VITE_DATA_SOURCE === "backend") return null;
 	return (
-		<details className="mt-4 rounded-lg border border-dashed border-line-strong bg-white/60 p-3 text-xs text-muted-ink">
+		<details className="mt-4 rounded-lg border border-dashed border-line-strong bg-paper/60 p-3 text-xs text-muted-ink">
 			<summary className="cursor-pointer font-semibold text-ink-2">Prototipo con datos ficticios</summary>
 			<p className="mt-2">Usuarios de prueba (contraseña de prueba en <code className="mono">src/adapters/local/fixtures.ts</code>):</p>
 			<ul className="mono mt-1 list-inside list-disc">

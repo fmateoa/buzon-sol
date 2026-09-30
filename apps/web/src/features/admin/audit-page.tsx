@@ -75,7 +75,7 @@ export const AuditPage = () => {
 				title="Auditoría"
 				description="Registro de solo lectura. No se puede editar ni borrar."
 				actions={
-					<Button variant="bordered" startContent={<Download className="size-4" aria-hidden="true" />} onClick={() => void download()} isLoading={exportCsv.isPending} disabled={exportCsv.isPending} className="min-h-10 bg-white">
+					<Button variant="bordered" startContent={<Download className="size-4" aria-hidden="true" />} onClick={() => void download()} isLoading={exportCsv.isPending} disabled={exportCsv.isPending} className="min-h-10 bg-paper">
 						Exportar CSV
 					</Button>
 				}

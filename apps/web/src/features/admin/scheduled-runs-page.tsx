@@ -57,7 +57,7 @@ export const ScheduledRunsPage = () => {
 			{runs.isPending ? (
 				<BlockSkeleton lines={6} label="Cargando actividad" />
 			) : (
-				<Table ariaLabel="Consultas de todas las cuentas" dataHeader={COLUMNS} isChecks={false} isActions={false} classNameContainer="bg-white border border-line p-0">
+				<Table ariaLabel="Consultas de todas las cuentas" dataHeader={COLUMNS} isChecks={false} isActions={false} classNameContainer="bg-paper border border-line p-0">
 					<Table.Header>
 						<Table.HeaderRow>{({ item }) => <Table.HeaderColumn header={item} text={item.header} size={item.size} />}</Table.HeaderRow>
 					</Table.Header>

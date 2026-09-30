@@ -5,6 +5,7 @@ import { formatCount } from "./format";
 import { sanitizeRemoteHtml } from "./sanitize";
 import { computeNextRuns, describeDays, scheduleSummaryText } from "./schedule";
 import { includesNormalized } from "./text";
+import { readThemePreference, resolveTheme, setThemePreference, THEME_KEY } from "./theme";
 
 describe("filtro sin acentos", () => {
 	it("coincide ignorando tildes y mayúsculas", () => {
@@ -72,5 +73,28 @@ describe("sanitizeRemoteHtml", () => {
 		expect(html).toContain("<p>Hola</p>");
 		expect(html).toContain('href="https://www.sunat.gob.pe"');
 		expect(html).toContain('rel="noopener noreferrer nofollow"');
+	});
+});
+
+describe("tema claro/oscuro", () => {
+	it("sin preferencia guardada sigue al sistema (claro en pruebas)", () => {
+		expect(readThemePreference()).toBe("system");
+		expect(resolveTheme("system")).toBe("light");
+	});
+
+	it("aplica la clase `.dark` y guarda la preferencia; «Sistema» la borra", () => {
+		setThemePreference("dark");
+		expect(document.documentElement.classList.contains("dark")).toBe(true);
+		expect(document.documentElement.style.colorScheme).toBe("dark");
+		expect(window.localStorage.getItem(THEME_KEY)).toBe("dark");
+
+		setThemePreference("system");
+		expect(document.documentElement.classList.contains("dark")).toBe(false);
+		expect(window.localStorage.getItem(THEME_KEY)).toBeNull();
+	});
+
+	it("ignora valores guardados desconocidos", () => {
+		window.localStorage.setItem(THEME_KEY, "sepia");
+		expect(readThemePreference()).toBe("system");
 	});
 });

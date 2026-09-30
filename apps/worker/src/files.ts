@@ -61,6 +61,10 @@ export class FileProcessor {
       try {
         const response = await this.client.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
         const validated = validateFile(response, asset.kind);
+        if (asset.kind === "generated_document") {
+          // Keep SUNAT's original in the private bucket; the API serves only the sanitized copy.
+          await this.store.put(`${objectKey}.original`, response.bytes, "text/html");
+        }
         await this.store.put(objectKey, validated.bytes, validated.mime);
         await this.db.query(
           "UPDATE file_assets SET object_key=?,mime_type=?,size_bytes=?,sha256=?,state='stored' WHERE id=? AND account_id=?",

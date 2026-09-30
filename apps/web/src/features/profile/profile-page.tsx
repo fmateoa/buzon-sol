@@ -2,17 +2,26 @@ import { Link } from "react-router";
 import { Button } from "lizaui/button";
 import { Meta, PageHeader, Section } from "@/components/custom/layout-bits";
 import { Notice } from "@/components/custom/notice";
+import { Segmented } from "@/components/custom/segmented";
 import { ConnectionBadge } from "@/components/custom/status";
 import { useAppSession, useSetReadWarning } from "@/features/session/use-session";
 import { errorCopy } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
 import { PERMISSION_LABELS } from "@/lib/permissions";
+import { useTheme, type ThemePreference } from "@/lib/theme";
+
+const THEMES: { value: ThemePreference; label: string }[] = [
+	{ value: "system", label: "Sistema" },
+	{ value: "light", label: "Claro" },
+	{ value: "dark", label: "Oscuro" },
+];
 
 /** D10 · Perfil y preferencias. */
 export const ProfilePage = () => {
 	const session = useAppSession();
 	const setWarning = useSetReadWarning();
 	const { user, preferences } = session;
+	const theme = useTheme();
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -81,6 +90,12 @@ export const ProfilePage = () => {
 						{errorCopy(setWarning.error).body}
 					</Notice>
 				)}
+				<div className="mt-5 flex flex-col gap-2 border-t border-line pt-5">
+					<Segmented legend="Tema" name="theme" options={THEMES} value={theme.preference} onChange={theme.setPreference} />
+					<p className="text-sm text-muted-ink">
+						{theme.preference === "system" ? `Sigue la configuración de su equipo (ahora: ${theme.resolved === "dark" ? "oscuro" : "claro"}).` : "Se guarda solo en este navegador."}
+					</p>
+				</div>
 			</Section>
 		</div>
 	);

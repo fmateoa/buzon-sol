@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import { LocalAdapter } from "@/adapters/local/local-adapter";
 import { AppProviders } from "@/app/providers";
 import { routes } from "@/app/routes";
+import { applyTheme, watchTheme } from "@/lib/theme";
 import "./index.css";
 
 /**
@@ -12,6 +13,10 @@ import "./index.css";
  */
 const adapter = new LocalAdapter();
 const router = createBrowserRouter(routes);
+
+// Tema claro/oscuro: preferencia del visor o del sistema operativo.
+applyTheme();
+watchTheme();
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>

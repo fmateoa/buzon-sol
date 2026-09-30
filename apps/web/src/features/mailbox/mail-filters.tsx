@@ -19,7 +19,7 @@ const STATE_OPTIONS: { value: MailListFilters["state"]; label: string }[] = [
 ];
 
 const StateSegment = ({ state }: { state: MailListState }) => (
-	<div role="group" aria-label="Estado en SUNAT" className="inline-flex rounded-lg border border-line-strong bg-white p-0.5">
+	<div role="group" aria-label="Estado en SUNAT" className="inline-flex rounded-lg border border-line-strong bg-paper p-0.5">
 		{STATE_OPTIONS.map((o) => {
 			const active = state.filters.state === o.value;
 			return (
@@ -48,11 +48,11 @@ const DateRange = ({ state }: { state: MailListState }) => (
 	<div className="flex items-center gap-2">
 		<label className="flex flex-col gap-0.5 text-xs text-muted-ink">
 			Desde
-			<input type="date" value={state.filters.dateFrom ?? ""} max={state.filters.dateTo ?? undefined} onChange={(e) => state.setFilter("dateFrom", e.target.value || null)} className="h-9 rounded-md border border-line-strong bg-white px-2 text-sm text-ink" />
+			<input type="date" value={state.filters.dateFrom ?? ""} max={state.filters.dateTo ?? undefined} onChange={(e) => state.setFilter("dateFrom", e.target.value || null)} className="h-9 rounded-md border border-line-strong bg-paper px-2 text-sm text-ink" />
 		</label>
 		<label className="flex flex-col gap-0.5 text-xs text-muted-ink">
 			Hasta
-			<input type="date" value={state.filters.dateTo ?? ""} min={state.filters.dateFrom ?? undefined} onChange={(e) => state.setFilter("dateTo", e.target.value || null)} className="h-9 rounded-md border border-line-strong bg-white px-2 text-sm text-ink" />
+			<input type="date" value={state.filters.dateTo ?? ""} min={state.filters.dateFrom ?? undefined} onChange={(e) => state.setFilter("dateTo", e.target.value || null)} className="h-9 rounded-md border border-line-strong bg-paper px-2 text-sm text-ink" />
 		</label>
 	</div>
 );
@@ -108,18 +108,18 @@ const SearchInput = ({ state, box }: { state: MailListState; box: MailBox }) => 
 		isClearable
 		onClear={() => state.setFilter("query", "")}
 		classNameContainer="w-full md:w-72"
-		className="bg-white"
+		className="bg-paper dark:bg-paper"
 	/>
 );
 
 export const DesktopFilters = ({ state, folders, tags, box, columns, onRefresh, refreshing }: FilterControlsProps & { box: MailBox; columns: ColumnDef[]; onRefresh: () => void; refreshing: boolean }) => (
-	<div className="flex flex-col gap-3 rounded-lg border border-line bg-white p-3">
+	<div className="flex flex-col gap-3 rounded-lg border border-line bg-paper p-3">
 		<div className="flex flex-wrap items-center gap-3">
 			<SearchInput state={state} box={box} />
 			<StateSegment state={state} />
 			<div className="ml-auto flex items-center gap-2">
 				<ColumnMenu columns={columns} hidden={state.hiddenColumns} onToggle={state.toggleColumn} />
-				<Button size="sm" variant="bordered" isIconOnly aria-label="Recargar listado guardado" onClick={onRefresh} className="bg-white">
+				<Button size="sm" variant="bordered" isIconOnly aria-label="Recargar listado guardado" onClick={onRefresh} className="bg-paper dark:bg-paper">
 					<RefreshCw className={cn("size-4", refreshing && "motion-safe:animate-spin")} aria-hidden="true" />
 				</Button>
 			</div>
@@ -152,7 +152,7 @@ export const MobileFilters = ({ state, folders, tags, box, unreadCount }: Filter
 				<div className="min-w-0 flex-1">
 					<SearchInput state={state} box={box} />
 				</div>
-				<Button variant="bordered" onClick={() => setOpen(true)} startContent={<SlidersHorizontal className="size-4" aria-hidden="true" />} className="min-h-11 bg-white" aria-label={`Filtros${chips.length ? `, ${chips.length} activos` : ""}`}>
+				<Button variant="bordered" onClick={() => setOpen(true)} startContent={<SlidersHorizontal className="size-4" aria-hidden="true" />} className="min-h-11 bg-paper" aria-label={`Filtros${chips.length ? `, ${chips.length} activos` : ""}`}>
 					Filtros
 				</Button>
 			</div>
@@ -167,9 +167,9 @@ export const MobileFilters = ({ state, folders, tags, box, unreadCount }: Filter
 					))}
 				</ul>
 			)}
-			<Drawer isOpen={open} onClose={() => setOpen(false)} placement="bottom" size="lg" closeButtonLabel="Cerrar filtros">
+			<Drawer isOpen={open} onClose={() => setOpen(false)} placement="bottom" size="lg" isFloating backdrop="blur" closeButtonLabel="Cerrar filtros">
 				<DrawerContent>
-					<DrawerHeader>
+					<DrawerHeader className="pt-7">
 						<DrawerTitle className="text-lg font-semibold text-ink">Filtros</DrawerTitle>
 					</DrawerHeader>
 					<DrawerBody>

@@ -13,8 +13,8 @@
 /*
  * Tokens de lizaui (mismos nombres que su tema de referencia) con la paleta del diseño
  * de buzon-sol: azul de marca #1D4F7C, ámbar reservado a acciones con posible efecto en
- * SUNAT, verde de estado correcto y rojo de error. Excepción documentada: no se usa el
- * modo oscuro en esta entrega (el diseño de referencia solo define tema claro).
+ * SUNAT, verde de estado correcto y rojo de error. El tema oscuro (clase `.dark` en <html>, igual que
+ * lizaui) no está en el diseño: se derivó de esta paleta y se define más abajo.
  */
 @theme inline {
 	--font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
@@ -155,28 +155,34 @@
 	--shadow-medium: var(--shadow-cmd);
 	--shadow-large: var(--shadow-clg);
 
-	/* Tokens semánticos propios de buzon-sol (diseño UX v2). */
-	--color-ink: #16191d;
-	--color-ink-2: #2f363e;
-	--color-ink-3: #3a424b;
-	--color-muted-ink: #4a525c;
-	--color-subtle-ink: #5b636e;
-	--color-line: #d9dde2;
-	--color-line-strong: #c3c9d0;
-	--color-surface: #f4f6f8;
-	--color-surface-2: #f1f4f7;
-	--color-row-read: #fafbfc;
-	--color-brand: #1d4f7c;
-	--color-brand-soft: #eaf0f7;
-	--color-brand-line: #c9d3de;
-	--color-ok: #1c6b3f;
-	--color-ok-soft: #e8f4ec;
-	--color-err: #a1281b;
-	--color-err-soft: #fbebe9;
-	--color-effect: #c98a1b;
-	--color-effect-ink: #7a4b00;
-	--color-effect-soft: #fff4db;
-	--color-effect-softer: #fff7e6;
+	/* Tokens semánticos de buzon-sol (diseño UX v2). Valores en :root (claro) y .dark (oscuro). */
+	--color-ink: var(--bz-ink);
+	--color-ink-2: var(--bz-ink-2);
+	--color-ink-3: var(--bz-ink-3);
+	--color-muted-ink: var(--bz-muted-ink);
+	--color-subtle-ink: var(--bz-subtle-ink);
+	--color-line: var(--bz-line);
+	--color-line-strong: var(--bz-line-strong);
+	--color-line-soft: var(--bz-line-soft);
+	--color-surface: var(--bz-surface);
+	--color-paper: var(--bz-paper);
+	--color-surface-2: var(--bz-surface-2);
+	--color-row-read: var(--bz-row-read);
+	--color-brand: var(--bz-brand);
+	--color-brand-fill: var(--bz-brand-fill);
+	--color-brand-soft: var(--bz-brand-soft);
+	--color-brand-line: var(--bz-brand-line);
+	--color-ok: var(--bz-ok);
+	--color-ok-line: var(--bz-ok-line);
+	--color-ok-soft: var(--bz-ok-soft);
+	--color-err: var(--bz-err);
+	--color-err-line: var(--bz-err-line);
+	--color-err-soft: var(--bz-err-soft);
+	--color-effect: var(--bz-effect);
+	--color-effect-ink: var(--bz-effect-ink);
+	--color-effect-soft: var(--bz-effect-soft);
+	--color-effect-softer: var(--bz-effect-softer);
+	--color-effect-line: var(--bz-effect-line);
 
 	--animate-spinner-ease-spin: spinner-spin 0.8s ease infinite;
 	--animate-spinner-linear-spin: spinner-spin 0.8s linear infinite;
@@ -203,6 +209,36 @@
 }
 
 :root {
+	/* buzon-sol · tema claro (diseño UX v2). `paper` es el blanco de contenido y tarjetas;
+	   `brand-fill` es el azul de relleno bajo texto blanco. */
+	--bz-ink: #16191d;
+	--bz-ink-2: #2f363e;
+	--bz-ink-3: #3a424b;
+	--bz-muted-ink: #4a525c;
+	--bz-subtle-ink: #5b636e;
+	--bz-line: #d9dde2;
+	--bz-line-strong: #c3c9d0;
+	--bz-line-soft: #e3e6ea;
+	--bz-surface: #f4f6f8;
+	--bz-paper: #ffffff;
+	--bz-surface-2: #f1f4f7;
+	--bz-row-read: #fafbfc;
+	--bz-brand: #1d4f7c;
+	--bz-brand-fill: #1d4f7c;
+	--bz-brand-soft: #eaf0f7;
+	--bz-brand-line: #c9d3de;
+	--bz-ok: #1c6b3f;
+	--bz-ok-soft: #e8f4ec;
+	--bz-ok-line: #c4e2cf;
+	--bz-err: #a1281b;
+	--bz-err-soft: #fbebe9;
+	--bz-err-line: #d98a80;
+	--bz-effect: #c98a1b;
+	--bz-effect-ink: #7a4b00;
+	--bz-effect-soft: #fff4db;
+	--bz-effect-softer: #fff7e6;
+	--bz-effect-line: #f3d18f;
+
 	--motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 	--motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 	--motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -344,6 +380,166 @@
 	color-scheme: light;
 }
 
+/*
+ * Tema oscuro. El diseño de referencia solo define el tema claro: esta paleta conserva su jerarquía
+ * (barra lateral `surface`, contenido `paper`, azul de marca, ámbar solo para efecto en SUNAT) con
+ * contraste AA verificado para texto (≥ 4.5:1) y bordes de campos (≥ 3:1). Mismas escalas invertidas
+ * que el tema oscuro de referencia de lizaui (50 = más oscuro).
+ */
+.dark {
+	--bz-ink: #e8ebee;
+	--bz-ink-2: #d0d5da;
+	--bz-ink-3: #b9c0c7;
+	--bz-muted-ink: #a3abb4;
+	--bz-subtle-ink: #8f98a2;
+	--bz-line: #2f353c;
+	--bz-line-strong: #444b53;
+	--bz-line-soft: #262b31;
+	--bz-surface: #1c2025;
+	--bz-paper: #15181c;
+	--bz-surface-2: #23282e;
+	--bz-row-read: #181b1f;
+	--bz-brand: #7fb0e3;
+	--bz-brand-fill: #2e6aa6;
+	--bz-brand-soft: #18283a;
+	--bz-brand-line: #2d4661;
+	--bz-ok: #5cc48a;
+	--bz-ok-soft: #132a1d;
+	--bz-ok-line: #24533a;
+	--bz-err: #f0897d;
+	--bz-err-soft: #301816;
+	--bz-err-line: #6e2d26;
+	--bz-effect: #d9a03a;
+	--bz-effect-ink: #f0c46a;
+	--bz-effect-soft: #332610;
+	--bz-effect-softer: #2a200d;
+	--bz-effect-line: #6b5020;
+
+	--color-foreground-50: #1c2025;
+	--color-foreground-100: #23282e;
+	--color-foreground-200: #2f353c;
+	--color-foreground-300: #444b53;
+	--color-foreground-400: #6b747e;
+	--color-foreground-500: #8f98a2;
+	--color-foreground-600: #a3abb4;
+	--color-foreground-700: #b9c0c7;
+	--color-foreground-800: #d0d5da;
+	--color-foreground-900: #e8ebee;
+	--color-foreground-default: #e8ebee;
+
+	--color-divider-default: rgba(232, 235, 238, 0.12);
+	--color-focus-default: #7fb0e3;
+	--color-overlay-default: #000000;
+	--color-content1-default: #1c2025;
+	--color-content1-foreground: #e8ebee;
+	--color-content2-default: #23282e;
+	--color-content2-foreground: #d0d5da;
+	--color-content3-default: #2f353c;
+	--color-content3-foreground: #b9c0c7;
+	--color-content4-default: #444b53;
+	--color-content4-foreground: #a3abb4;
+
+	--color-default-50: #1c2025;
+	--color-default-100: #23282e;
+	--color-default-200: #2f353c;
+	--color-default-300: #444b53;
+	--color-default-400: #6b747e;
+	--color-default-500: #8f98a2;
+	--color-default-600: #a3abb4;
+	--color-default-700: #b9c0c7;
+	--color-default-800: #d0d5da;
+	--color-default-900: #e8ebee;
+	--color-default-foreground: #e8ebee;
+	--color-default-default: #444b53;
+
+	--color-primary-50: #10202f;
+	--color-primary-100: #18283a;
+	--color-primary-200: #22405e;
+	--color-primary-300: #2d5a86;
+	--color-primary-400: #5a8fc8;
+	--color-primary-500: #2e6aa6;
+	--color-primary-600: #7fb0e3;
+	--color-primary-700: #a9cbee;
+	--color-primary-800: #d3e5f7;
+	--color-primary-900: #eaf2fb;
+	--color-primary-foreground: #ffffff;
+	--color-primary-default: #2e6aa6;
+
+	--color-secondary-50: #1c2025;
+	--color-secondary-100: #23282e;
+	--color-secondary-200: #2f353c;
+	--color-secondary-300: #444b53;
+	--color-secondary-400: #6b747e;
+	--color-secondary-500: #8f98a2;
+	--color-secondary-600: #a3abb4;
+	--color-secondary-700: #b9c0c7;
+	--color-secondary-800: #d0d5da;
+	--color-secondary-900: #e8ebee;
+	--color-secondary-foreground: #15181c;
+	--color-secondary-default: #a3abb4;
+
+	--color-success-50: #0d1f15;
+	--color-success-100: #132a1d;
+	--color-success-200: #1d4a31;
+	--color-success-300: #24533a;
+	--color-success-400: #3f9a67;
+	--color-success-500: #5cc48a;
+	--color-success-600: #7fd3a3;
+	--color-success-700: #a6e2c0;
+	--color-success-800: #cdeedb;
+	--color-success-900: #e8f7ee;
+	--color-success-foreground: #0b1a12;
+	--color-success-default: #5cc48a;
+
+	--color-warning-50: #221a08;
+	--color-warning-100: #2a200d;
+	--color-warning-200: #332610;
+	--color-warning-300: #6b5020;
+	--color-warning-400: #b07f24;
+	--color-warning-500: #d9a03a;
+	--color-warning-600: #f0c46a;
+	--color-warning-700: #f5d593;
+	--color-warning-800: #fae7c0;
+	--color-warning-900: #fdf4e2;
+	--color-warning-foreground: #1f1603;
+	--color-warning-default: #d9a03a;
+
+	--color-danger-50: #231110;
+	--color-danger-100: #301816;
+	--color-danger-200: #4a211d;
+	--color-danger-300: #6e2d26;
+	--color-danger-400: #b8554a;
+	--color-danger-500: #f0897d;
+	--color-danger-600: #f4a69d;
+	--color-danger-700: #f8c3bd;
+	--color-danger-800: #fbe0dd;
+	--color-danger-900: #fdf0ee;
+	--color-danger-foreground: #1f0d0b;
+	--color-danger-default: #f0897d;
+
+	--border: #2f353c;
+	--shadow-csm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 1px rgb(255 255 255 / 0.12);
+	--shadow-cmd: 0 2px 12px rgb(0 0 0 / 0.45), 0 0 1px rgb(255 255 255 / 0.14);
+	--shadow-clg: 0 20px 50px rgb(0 0 0 / 0.55), 0 0 1px rgb(255 255 255 / 0.16);
+
+	--background: #111417;
+	--foreground: #e8ebee;
+	--card: #1c2025;
+	--card-foreground: #e8ebee;
+	--popover: #1c2025;
+	--popover-foreground: #e8ebee;
+	--muted: #23282e;
+	--muted-foreground: #a3abb4;
+	--accent: #18283a;
+	--accent-foreground: #d3e5f7;
+	--destructive: #f0897d;
+	--input: #6b747e;
+	--ring: #7fb0e3;
+	--select-input-bg: #15181c;
+
+	color-scheme: dark;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	:root {
 		--motion-duration-fast: 0ms;
@@ -373,7 +569,7 @@
 	}
 	/* Foco visible de 3 px en todos los controles (diseño §6). */
 	:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-		outline: 3px solid var(--color-brand);
+		outline: 3px solid var(--bz-brand);
 		outline-offset: 2px;
 		border-radius: 4px;
 	}
@@ -389,7 +585,7 @@
 		max-width: 72ch;
 		font-size: 1rem;
 		line-height: 1.65;
-		color: var(--color-ink);
+		color: var(--bz-ink);
 		overflow-wrap: anywhere;
 	}
 	.remote-body p {
@@ -401,11 +597,11 @@
 	}
 	.remote-body td,
 	.remote-body th {
-		border: 1px solid var(--color-line);
+		border: 1px solid var(--bz-line);
 		padding: 4px 8px;
 	}
 	.remote-body a {
-		color: var(--color-brand);
+		color: var(--bz-brand);
 		text-decoration: underline;
 	}
 }

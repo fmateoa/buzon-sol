@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "lizaui/ui";
+import { Tabs, TabsContent } from "lizaui/ui";
 import { ArrowLeft } from "lucide-react";
 import type { AccountId } from "@/domain/types";
 import { BlockSkeleton, PageHeader, Section } from "@/components/custom/layout-bits";
 import { QueryError } from "@/components/custom/query-error";
 import { ConnectionBadge } from "@/components/custom/status";
+import { UnderlineTabsList, UnderlineTabsTrigger } from "@/components/custom/underline-tabs";
 import { formatRelative } from "@/lib/format";
 import { AccountActiveControl, AccountForm, TestConnectionControl } from "./account-form";
 import { useAccountUsers, useAdminAccount } from "./queries";
@@ -43,6 +45,8 @@ export const AccountAdminDetailPage = () => {
 	const [params, setParams] = useSearchParams();
 	const tab: Tab = TABS.includes(params.get("tab") as Tab) ? (params.get("tab") as Tab) : "datos";
 	const account = useAdminAccount(accountId);
+	// Hueco de la cabecera para «Consultar ahora» y «Guardar» del programador (diseño A3).
+	const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
 
 	if (account.isPending) return <BlockSkeleton lines={6} label="Cargando cuenta" />;
 	if (account.isError) return <QueryError error={account.error} onRetry={() => void account.refetch()} />;
@@ -64,12 +68,15 @@ export const AccountAdminDetailPage = () => {
 					</span>
 				}
 			/>
-			<Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
-				<TabsList aria-label="Secciones de la cuenta">
-					<TabsTrigger value="datos">Datos y credencial</TabsTrigger>
-					<TabsTrigger value="programador">Programador</TabsTrigger>
-					<TabsTrigger value="usuarios">Usuarios con acceso</TabsTrigger>
-				</TabsList>
+			<Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="gap-0">
+				<div className="flex flex-col-reverse gap-3 border-b border-line-soft sm:flex-row sm:items-end sm:justify-between">
+					<UnderlineTabsList aria-label="Secciones de la cuenta" className="overflow-x-auto">
+						<UnderlineTabsTrigger value="datos">Datos y credencial</UnderlineTabsTrigger>
+						<UnderlineTabsTrigger value="programador">Programador</UnderlineTabsTrigger>
+						<UnderlineTabsTrigger value="usuarios">Usuarios con acceso</UnderlineTabsTrigger>
+					</UnderlineTabsList>
+					<div ref={setActionsSlot} className="flex flex-wrap gap-2 empty:hidden sm:pb-2.5" />
+				</div>
 				<TabsContent value="datos" className="mt-4 flex flex-col gap-5">
 					<Section title="Datos y Clave SOL">
 						<AccountForm key={a.id} mode="edit" account={a} onDone={() => void account.refetch()} onCancel={() => undefined} />
@@ -85,7 +92,7 @@ export const AccountAdminDetailPage = () => {
 					</Section>
 				</TabsContent>
 				<TabsContent value="programador" className="mt-4">
-					<ScheduleEditor accountId={a.id} />
+					<ScheduleEditor accountId={a.id} actionsSlot={actionsSlot} />
 				</TabsContent>
 				<TabsContent value="usuarios" className="mt-4">
 					<AccountUsers accountId={a.id} />

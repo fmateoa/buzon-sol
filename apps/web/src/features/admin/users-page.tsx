@@ -12,7 +12,9 @@ import { ColumnMenu, FilterSelect, ListTable, type ColumnDef } from "@/component
 import { EmptyState, PageHeader } from "@/components/custom/layout-bits";
 import { Notice } from "@/components/custom/notice";
 import { ResponsiveDialog } from "@/components/custom/responsive-dialog";
+import { SideSheet } from "@/components/custom/side-sheet";
 import { useAppSession } from "@/features/session/use-session";
+import { useLatched } from "@/hooks/use-latched";
 import { useListState } from "@/hooks/use-list-state";
 import { runBatch, type BatchOutcome } from "@/lib/batch";
 import { cn } from "@/lib/cn";
@@ -49,6 +51,7 @@ export const UsersAdminPage = () => {
 	const roles = useRoles();
 	const setStatus = useSetUserStatus();
 	const [editing, setEditing] = useState<AppUser | "new" | null>(null);
+	const sheet = useLatched(editing);
 	const [confirmUser, setConfirmUser] = useState<AppUser | null>(null);
 	const [batch, setBatch] = useState<BatchAction | null>(null);
 	const [batchRunning, setBatchRunning] = useState(false);
@@ -129,7 +132,7 @@ export const UsersAdminPage = () => {
 				actionWidth={200}
 				batchBar={
 					state.selection.length > 0 && (
-						<div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-2.5 text-sm" role="region" aria-label="Acciones de lote">
+						<div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-paper px-4 py-2.5 text-sm" role="region" aria-label="Acciones de lote">
 							<span className="font-semibold text-ink">{state.selection.length} seleccionados</span>
 							<div className="ml-auto flex flex-wrap gap-2">
 								<Button size="sm" variant="light" onClick={state.clearSelection}>
@@ -151,8 +154,8 @@ export const UsersAdminPage = () => {
 					</EmptyState>
 				}
 				renderFilter={(column) => {
-					if (column.id === "name") return <Input size="sm" value={state.filters.name} onChange={(e) => state.setFilter("name", e.target.value)} placeholder="Buscar nombre" aria-label="Filtrar por nombre" className="bg-white" />;
-					if (column.id === "email") return <Input size="sm" value={state.filters.email} onChange={(e) => state.setFilter("email", e.target.value)} placeholder="Buscar correo" aria-label="Filtrar por correo" className="bg-white" />;
+					if (column.id === "name") return <Input size="sm" value={state.filters.name} onChange={(e) => state.setFilter("name", e.target.value)} placeholder="Buscar nombre" aria-label="Filtrar por nombre" className="bg-paper dark:bg-paper" />;
+					if (column.id === "email") return <Input size="sm" value={state.filters.email} onChange={(e) => state.setFilter("email", e.target.value)} placeholder="Buscar correo" aria-label="Filtrar por correo" className="bg-paper dark:bg-paper" />;
 					if (column.id === "status")
 						return (
 							<FilterSelect
@@ -192,7 +195,7 @@ export const UsersAdminPage = () => {
 							<Table.BodyColumn className="text-sm text-ink-2">{accountsFor(u)}</Table.BodyColumn>
 							<Table.BodyColumn>
 								<div className="flex gap-2">
-									<Button size="sm" variant="bordered" onClick={() => setEditing(u)} className="bg-white">
+									<Button size="sm" variant="bordered" onClick={() => setEditing(u)} className="bg-paper dark:bg-paper">
 										Editar<span className="sr-only"> {u.name}</span>
 									</Button>
 									{!self && (
@@ -208,9 +211,24 @@ export const UsersAdminPage = () => {
 				}}
 			/>
 
-			<ResponsiveDialog open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Dar de alta usuario" : `Acceso de ${editing?.name ?? ""}`} size="lg">
-				{editing !== null && <UserForm user={editing === "new" ? undefined : editing} roles={roleList} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} />}
-			</ResponsiveDialog>
+			<SideSheet
+				open={editing !== null}
+				onClose={() => setEditing(null)}
+				title={sheet === "new" ? "Dar de alta usuario" : `Acceso de ${sheet?.name ?? ""}`}
+				description={sheet === "new" ? "La asignación de cuentas ocurre en el rol." : sheet?.email}
+				size="md"
+			>
+				{sheet !== null && (
+					<UserForm
+						key={sheet === "new" ? "new" : sheet.id}
+						user={sheet === "new" ? undefined : sheet}
+						roles={roleList}
+						isSelf={sheet !== "new" && sheet.id === session.user.id}
+						onDone={() => setEditing(null)}
+						onCancel={() => setEditing(null)}
+					/>
+				)}
+			</SideSheet>
 
 			<ResponsiveDialog
 				open={confirmUser !== null}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { Queue, QueueEvents } from "bullmq";
-import { INVENTORY_QUEUE, redisOptions, type InventoryJob } from "@buzon-sol/domain";
+import { AppError, INVENTORY_QUEUE, redisOptions, type InventoryJob } from "@buzon-sol/domain";
 import { InventoryRunner } from "../src/inventory";
 import { startInventoryWorker } from "../src/queue";
 import { testDb } from "./db";
@@ -28,6 +28,31 @@ test("BullMQ dispatches a persisted inventory run with an isolated test client",
     assert.equal(rows[0].state, "complete");
     const pages: { n: number }[] = await db.query("SELECT COUNT(*) AS n FROM sync_pages WHERE run_id=?", [runId]);
     assert.equal(Number(pages[0].n), 2);
+  } finally {
+    await worker.close();
+    await events.close();
+    await queue.close();
+    await db.destroy();
+  }
+});
+
+test("async credential failure keeps its error code on the pending run",
+  { skip: process.env.BUZON_TEST_DB !== "1" || process.env.BUZON_TEST_REDIS !== "1" }, async () => {
+  const db = await testDb();
+  const accountId = randomUUID();
+  const queue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisOptions() });
+  const events = new QueueEvents(INVENTORY_QUEUE, { connection: redisOptions() });
+  const worker = startInventoryWorker(db, async () => { throw new AppError("needs_credential"); });
+  try {
+    await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
+      [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
+    const runId = await new InventoryRunner(db, { async listPage() { throw new Error("unused"); } }).createRun(accountId, "test");
+    await events.waitUntilReady();
+    const job = await queue.add("inventory", { accountId, runId }, { jobId: runId, removeOnFail: true });
+    await assert.rejects(job.waitUntilFinished(events, 10_000));
+    const rows: { state: string; error_code: string }[] = await db.query(
+      "SELECT state,error_code FROM sync_runs WHERE id=?", [runId]);
+    assert.deepEqual(rows[0], { state: "partial", error_code: "needs_credential" });
   } finally {
     await worker.close();
     await events.close();

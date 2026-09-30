@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Form, Formik, useFormikContext, type FormikHelpers } from "formik";
+import { Formik, useFormikContext, type FormikHelpers } from "formik";
 import * as Yup from "yup";
 import { Button } from "lizaui/button";
 import { Checkbox } from "lizaui/checkbox";
@@ -12,9 +12,10 @@ import { FocusFirstError, GroupError, TextField } from "@/components/custom/form
 import { ListTable, type ColumnDef } from "@/components/custom/list-table";
 import { EmptyState, PageHeader, Section } from "@/components/custom/layout-bits";
 import { Notice } from "@/components/custom/notice";
-import { ResponsiveDialog } from "@/components/custom/responsive-dialog";
+import { SheetBody, SheetFooter, SheetForm, SideSheet } from "@/components/custom/side-sheet";
 import { RemoteEffectBadge } from "@/components/custom/status";
 import { useAppSession } from "@/features/session/use-session";
+import { useLatched } from "@/hooks/use-latched";
 import { useListState } from "@/hooks/use-list-state";
 import { cn } from "@/lib/cn";
 import { errorCopy, isAppError } from "@/lib/errors";
@@ -36,73 +37,78 @@ const schema = Yup.object({
 	}),
 });
 
-const RoleFields = ({ lockedSelf }: { lockedSelf: boolean }) => {
+const RoleFields = ({ lockedSelf, onCancel }: { lockedSelf: boolean; onCancel: () => void }) => {
 	const { values, setFieldValue, errors, submitCount, isSubmitting, status } = useFormikContext<RoleInput>();
 	const accounts = useAccountOptions();
 	const baseId = useId();
 	const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 	const show = submitCount > 0;
 	return (
-		<Form noValidate className="flex flex-col gap-5">
-			<FocusFirstError />
-			{status && (
-				<Notice tone="error" role="alert" title={status.title}>
-					{status.body}
-				</Notice>
-			)}
-			<TextField name="name" label="Nombre del rol" required maxLength={60} hint="El nombre es solo una etiqueta: la autorización sale de los permisos y cuentas elegidos." />
-			<fieldset data-field="permissions" aria-describedby={show && errors.permissions ? `${baseId}-perm` : undefined}>
-				<legend className="mb-2 text-sm font-semibold text-ink">Permisos</legend>
-				<div className="grid gap-2 sm:grid-cols-2">
-					{PERMISSIONS.map((p) => {
-						const id = `${baseId}-${p}`;
-						return (
-							<div key={p} className="flex items-start gap-2">
-								<Checkbox id={id} checked={values.permissions.includes(p)} onChange={() => void setFieldValue("permissions", toggle<Permission>(values.permissions, p))} />
-								<label htmlFor={id} className="text-sm text-ink">
-									{PERMISSION_LABELS[p]}
-									{REMOTE_EFFECT_PERMISSIONS.includes(p) && <RemoteEffectBadge className="ml-2" />}
-								</label>
-							</div>
-						);
-					})}
-				</div>
-				<GroupError id={`${baseId}-perm`} message={show ? (errors.permissions as string | undefined) : undefined} />
-			</fieldset>
-			<fieldset data-field="accountIds" aria-describedby={show && errors.accountIds ? `${baseId}-acc` : undefined}>
-				<legend className="mb-2 text-sm font-semibold text-ink">Cuentas SUNAT visibles</legend>
-				<div className="flex flex-col gap-2">
-					<div className="flex items-start gap-2">
-						<Checkbox id={`${baseId}-all`} checked={values.allAccounts} onChange={(e) => void setFieldValue("allAccounts", e.target.checked)} />
-						<label htmlFor={`${baseId}-all`} className="text-sm font-semibold text-ink">
-							Todas, incluidas las que se agreguen
-						</label>
-					</div>
-					{!values.allAccounts &&
-						accounts.data?.map((a) => {
-							const id = `${baseId}-acc-${a.id}`;
+		<SheetForm>
+			<SheetBody>
+				<FocusFirstError />
+				{status && (
+					<Notice tone="error" role="alert" title={status.title}>
+						{status.body}
+					</Notice>
+				)}
+				<TextField name="name" label="Nombre del rol" required maxLength={60} hint="El nombre es solo una etiqueta: la autorización sale de los permisos y cuentas elegidos." />
+				<fieldset data-field="permissions" aria-describedby={show && errors.permissions ? `${baseId}-perm` : undefined}>
+					<legend className="mb-2 text-sm font-semibold text-ink">Permisos</legend>
+					<div className="grid gap-2 sm:grid-cols-2">
+						{PERMISSIONS.map((p) => {
+							const id = `${baseId}-${p}`;
 							return (
-								<div key={a.id} className="flex items-center gap-2 pl-6">
-									<Checkbox id={id} checked={values.accountIds.includes(a.id)} onChange={() => void setFieldValue("accountIds", toggle<AccountId>(values.accountIds, a.id))} />
+								<div key={p} className="flex items-start gap-2">
+									<Checkbox id={id} checked={values.permissions.includes(p)} onChange={() => void setFieldValue("permissions", toggle<Permission>(values.permissions, p))} />
 									<label htmlFor={id} className="text-sm text-ink">
-										{a.alias}
+										{PERMISSION_LABELS[p]}
+										{REMOTE_EFFECT_PERMISSIONS.includes(p) && <RemoteEffectBadge className="ml-2" />}
 									</label>
 								</div>
 							);
 						})}
-				</div>
-				<GroupError id={`${baseId}-acc`} message={show ? (errors.accountIds as string | undefined) : undefined} />
-			</fieldset>
-			<Notice tone="info" role="note">
-				Los cambios aplican al guardar, también a las sesiones abiertas, y quedan en auditoría.
-				{lockedSelf && " Este es su propio rol: no puede quitarle la gestión de usuarios ni el acceso a todas las cuentas."}
-			</Notice>
-			<div className="flex justify-end gap-2 border-t border-line pt-4">
-				<Button type="submit" color="primary" isLoading={isSubmitting} disabled={isSubmitting}>
+					</div>
+					<GroupError id={`${baseId}-perm`} message={show ? (errors.permissions as string | undefined) : undefined} />
+				</fieldset>
+				<fieldset data-field="accountIds" aria-describedby={show && errors.accountIds ? `${baseId}-acc` : undefined}>
+					<legend className="mb-2 text-sm font-semibold text-ink">Cuentas SUNAT visibles</legend>
+					<div className="flex flex-col gap-2">
+						<div className="flex items-start gap-2">
+							<Checkbox id={`${baseId}-all`} checked={values.allAccounts} onChange={(e) => void setFieldValue("allAccounts", e.target.checked)} />
+							<label htmlFor={`${baseId}-all`} className="text-sm font-semibold text-ink">
+								Todas, incluidas las que se agreguen
+							</label>
+						</div>
+						{!values.allAccounts &&
+							accounts.data?.map((a) => {
+								const id = `${baseId}-acc-${a.id}`;
+								return (
+									<div key={a.id} className="flex items-center gap-2 pl-6">
+										<Checkbox id={id} checked={values.accountIds.includes(a.id)} onChange={() => void setFieldValue("accountIds", toggle<AccountId>(values.accountIds, a.id))} />
+										<label htmlFor={id} className="text-sm text-ink">
+											{a.alias}
+										</label>
+									</div>
+								);
+							})}
+					</div>
+					<GroupError id={`${baseId}-acc`} message={show ? (errors.accountIds as string | undefined) : undefined} />
+				</fieldset>
+				<Notice tone="info" role="note">
+					Los cambios aplican al guardar, también a las sesiones abiertas, y quedan en auditoría.
+					{lockedSelf && " Este es su propio rol: no puede quitarle la gestión de usuarios ni el acceso a todas las cuentas."}
+				</Notice>
+			</SheetBody>
+			<SheetFooter>
+				<Button variant="bordered" onClick={onCancel} disabled={isSubmitting} className="min-h-10 bg-paper">
+					Cancelar
+				</Button>
+				<Button type="submit" color="primary" isLoading={isSubmitting} disabled={isSubmitting} className="min-h-10">
 					Guardar rol
 				</Button>
-			</div>
-		</Form>
+			</SheetFooter>
+		</SheetForm>
 	);
 };
 
@@ -126,7 +132,7 @@ const PermissionMatrix = ({ roles, editingId }: { roles: RolePermissions[]; edit
 								Permiso
 							</th>
 							{roles.map((r) => (
-								<th key={r.id} scope="col" className={cn("px-3 py-2 text-center text-sm font-semibold text-ink", r.id === editingId && "bg-brand-soft shadow-[inset_0_3px_0_#1D4F7C]")}>
+								<th key={r.id} scope="col" className={cn("px-3 py-2 text-center text-sm font-semibold text-ink", r.id === editingId && "bg-brand-soft shadow-[inset_0_3px_0_var(--bz-brand)]")}>
 									{r.name}
 									<span className="block text-xs font-normal text-muted-ink">
 										{r.userCount} {r.userCount === 1 ? "usuario" : "usuarios"}
@@ -180,6 +186,7 @@ export const RolesAdminPage = () => {
 	const create = useCreateRole();
 	const update = useUpdateRole();
 	const [editing, setEditing] = useState<RolePermissions | "new" | null>(null);
+	const sheet = useLatched(editing);
 	const accounts = useAccountOptions();
 
 	const submit = async (values: RoleInput, helpers: FormikHelpers<RoleInput>) => {
@@ -197,8 +204,8 @@ export const RolesAdminPage = () => {
 	};
 
 	const initial: RoleInput =
-		editing && editing !== "new"
-			? { name: editing.name, permissions: [...editing.permissions], allAccounts: editing.allAccounts, accountIds: [...editing.accountIds] }
+		sheet && sheet !== "new"
+			? { name: sheet.name, permissions: [...sheet.permissions], allAccounts: sheet.allAccounts, accountIds: [...sheet.accountIds] }
 			: { name: "", permissions: ["view_mailbox"], allAccounts: false, accountIds: [] };
 
 	return (
@@ -225,7 +232,7 @@ export const RolesAdminPage = () => {
 				rowName={(r) => r.name}
 				countNoun={["rol", "roles"]}
 				emptyContent={<EmptyState title="No hay roles con este nombre" action={<Button variant="bordered" onClick={state.resetFilters}>Quitar filtros</Button>} />}
-				renderFilter={(column) => (column.id === "name" ? <Input size="sm" value={state.filters.name} onChange={(e) => state.setFilter("name", e.target.value)} placeholder="Buscar rol" aria-label="Filtrar por nombre de rol" className="bg-white" /> : null)}
+				renderFilter={(column) => (column.id === "name" ? <Input size="sm" value={state.filters.name} onChange={(e) => state.setFilter("name", e.target.value)} placeholder="Buscar rol" aria-label="Filtrar por nombre de rol" className="bg-paper dark:bg-paper" /> : null)}
 				renderCells={(r) => (
 					<>
 						<Table.BodyColumn className="font-medium text-ink">{r.name}</Table.BodyColumn>
@@ -238,7 +245,7 @@ export const RolesAdminPage = () => {
 							{r.allAccounts ? "Todas (incluye futuras)" : (accounts.data ?? []).filter((a) => r.accountIds.includes(a.id)).map((a) => a.alias).join(", ") || "Ninguna"}
 						</Table.BodyColumn>
 						<Table.BodyColumn>
-							<Button size="sm" variant="bordered" onClick={() => setEditing(r)} className="bg-white">
+							<Button size="sm" variant="bordered" onClick={() => setEditing(r)} className="bg-paper dark:bg-paper">
 								Editar<span className="sr-only"> rol {r.name}</span>
 							</Button>
 						</Table.BodyColumn>
@@ -248,13 +255,19 @@ export const RolesAdminPage = () => {
 			{allRoles.data && <PermissionMatrix roles={allRoles.data.rows} editingId={editing && editing !== "new" ? editing.id : null} />}
 			<p className="text-xs text-muted-ink">✓ permitido · — no permitido. Columna resaltada: rol en edición. Los cambios aplican al guardar y quedan en auditoría.</p>
 
-			<ResponsiveDialog open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Crear rol" : `Editar rol ${editing?.name ?? ""}`} size="2xl">
-				{editing !== null && (
-					<Formik<RoleInput> key={editing === "new" ? "new" : editing.id} initialValues={initial} validationSchema={schema} onSubmit={submit}>
-						<RoleFields lockedSelf={editing !== "new" && editing.id === session.user.roleId} />
+			<SideSheet
+				open={editing !== null}
+				onClose={() => setEditing(null)}
+				title={sheet === "new" ? "Crear rol" : `Editar rol ${sheet?.name ?? ""}`}
+				description="Permisos y cuentas SUNAT visibles. La columna resaltada de la matriz es el rol en edición."
+				size="lg"
+			>
+				{sheet !== null && (
+					<Formik<RoleInput> key={sheet === "new" ? "new" : sheet.id} initialValues={initial} validationSchema={schema} onSubmit={submit}>
+						<RoleFields lockedSelf={sheet !== "new" && sheet.id === session.user.roleId} onCancel={() => setEditing(null)} />
 					</Formik>
 				)}
-			</ResponsiveDialog>
+			</SideSheet>
 		</div>
 	);
 };

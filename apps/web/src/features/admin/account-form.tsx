@@ -1,5 +1,5 @@
-import { useId, useState } from "react";
-import { Form, Formik, type FormikHelpers } from "formik";
+import { useId, useState, type ReactNode } from "react";
+import { Formik, type FormikHelpers } from "formik";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Yup from "yup";
 import { Button } from "lizaui/button";
@@ -11,6 +11,7 @@ import type { AccountId, AdminAccount } from "@/domain/types";
 import { FocusFirstError, TextField } from "@/components/custom/form-field";
 import { Notice } from "@/components/custom/notice";
 import { ResponsiveDialog } from "@/components/custom/responsive-dialog";
+import { SheetBody, SheetFooter, SheetForm } from "@/components/custom/side-sheet";
 import { errorCopy, isAppError } from "@/lib/errors";
 import { formatDate, formatRelative } from "@/lib/format";
 import { useCreateAccount, useReplaceCredential, useSetAccountActive, useTestConnection, useUpdateAccount } from "./queries";
@@ -53,13 +54,7 @@ const PasswordField = () => {
 	const toggleId = useId();
 	return (
 		<div className="flex flex-col gap-2">
-			<TextField
-				name="solPassword"
-				label="Nueva Clave SOL"
-				type={visible ? "text" : "password"}
-				autoComplete="new-password"
-				hint="Se guarda cifrada. Después de guardarla nadie puede verla, tampoco los administradores. Cada cambio queda en el registro de auditoría."
-			/>
+			<TextField name="solPassword" label="Nueva Clave SOL" type={visible ? "text" : "password"} autoComplete="new-password" />
 			<div className="flex items-center gap-2">
 				<Checkbox id={toggleId} checked={visible} onChange={(e) => setVisible(e.target.checked)} />
 				<label htmlFor={toggleId} className="text-sm text-ink-2">
@@ -73,12 +68,17 @@ const PasswordField = () => {
 interface AccountFormProps {
 	mode: "create" | "edit";
 	account?: AdminAccount;
-	onDone: (account: AdminAccount) => void;
+	/** `replacedCredential`: se guardó una Clave SOL nueva (conviene probar la conexión antes de cerrar). */
+	onDone: (account: AdminAccount, info: { replacedCredential: boolean }) => void;
 	onCancel: () => void;
+	/** Contenido adicional al final del cuerpo, p. ej. «Probar conexión…» en el panel A2. */
+	extra?: ReactNode;
+	/** Acción a la izquierda del pie, p. ej. «Desactivar cuenta» en el panel A2. */
+	footerStart?: ReactNode;
 }
 
 /** A2 · Alta/edición de cuenta. La Clave SOL es de solo escritura y se borra del estado al guardar. */
-export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProps) => {
+export const AccountForm = ({ mode, account, onDone, onCancel, extra, footerStart }: AccountFormProps) => {
 	const create = useCreateAccount();
 	const update = useUpdateAccount((account?.id ?? "") as AccountId);
 	const replace = useReplaceCredential((account?.id ?? "") as AccountId);
@@ -95,10 +95,10 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 				if (values.solPassword) {
 					const adapterReplace = await replaceFor(created.id, values.solPassword);
 					helpers.resetForm();
-					onDone(adapterReplace ?? created);
+					onDone(adapterReplace ?? created, { replacedCredential: true });
 				} else {
 					helpers.resetForm();
-					onDone(created);
+					onDone(created, { replacedCredential: false });
 				}
 				return;
 			}
@@ -110,7 +110,7 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 			const saved = await update.mutateAsync({ alias: values.alias, solUser: values.solUser });
 			helpers.resetForm({ values: { ...values, solPassword: "" } });
 			setResult("Cambios guardados.");
-			onDone(saved);
+			onDone(saved, { replacedCredential: false });
 		} catch (error) {
 			if (isAppError(error, "validation") && error.fields) helpers.setErrors(error.fields as Partial<Values>);
 			else helpers.setStatus(errorCopy(error));
@@ -130,45 +130,61 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 	return (
 		<Formik<Values> initialValues={initial} validationSchema={mode === "create" ? createSchema : editSchema} onSubmit={submit}>
 			{({ isSubmitting, status, values, resetForm }) => (
-				<Form noValidate className="flex flex-col gap-5">
-					<FocusFirstError />
-					{status && (
-						<Notice tone="error" role="alert" title={status.title}>
-							{status.body}
-						</Notice>
-					)}
-					{result && <Notice tone="success">{result}</Notice>}
-					<TextField name="alias" label="Nombre interno" required maxLength={80} />
-					{mode === "create" ? (
-						<TextField name="ruc" label="RUC" required inputMode="numeric" maxLength={11} hint="Se guarda protegido. En listados solo se muestra enmascarado." />
-					) : (
-						<div>
-							<p className="text-sm text-foreground">RUC</p>
-							<p className="mono text-sm text-ink">{account?.rucMasked}</p>
-							<p className="text-xs text-muted-ink">No se puede cambiar. Para otro RUC, agregue otra cuenta.</p>
-						</div>
-					)}
-					<TextField
-						name="solUser"
-						label={mode === "edit" ? "Nuevo usuario SOL" : "Usuario SOL"}
-						required={mode === "create"}
-						maxLength={20}
-						hint={mode === "edit" ? `Actual: ${account?.solUserMasked ?? "sin usuario"}. Déjelo vacío para conservarlo.` : undefined}
-					/>
-
-					<fieldset className="flex flex-col gap-3 rounded-lg border border-line p-4">
-						<legend className="px-1 text-sm font-semibold text-ink">Clave SOL</legend>
-						{account && (
-							<p className={`text-sm ${credentialTone[account.credential.status]}`}>
-								<span aria-hidden="true">{credentialIcon[account.credential.status]} </span>
-								{credentialStatusText(account)}
-							</p>
+				<SheetForm>
+					<SheetBody>
+						<FocusFirstError />
+						{status && (
+							<Notice tone="error" role="alert" title={status.title}>
+								{status.body}
+							</Notice>
 						)}
-						<p className="text-xs text-muted-ink">Nunca se muestra. Solo puede reemplazarse.</p>
-						<PasswordField />
-					</fieldset>
+						{result && <Notice tone="success">{result}</Notice>}
+						<TextField name="alias" label="Nombre interno" required maxLength={80} />
+						<div className="grid gap-4 sm:grid-cols-2">
+							{mode === "create" ? (
+								<TextField name="ruc" label="RUC" required inputMode="numeric" maxLength={11} hint="Se guarda protegido. En listados solo se muestra enmascarado." />
+							) : (
+								<div className="flex flex-col gap-1">
+									<p className="text-sm text-foreground">RUC</p>
+									<p className="mono flex min-h-10 items-center rounded-md border border-line bg-surface px-3 text-sm text-ink">{account?.rucMasked}</p>
+									<p className="text-xs text-muted-ink">No se puede cambiar. Para otro RUC, agregue otra cuenta.</p>
+								</div>
+							)}
+							<TextField
+								name="solUser"
+								label={mode === "edit" ? "Nuevo usuario SOL" : "Usuario SOL"}
+								required={mode === "create"}
+								maxLength={20}
+								hint={mode === "edit" ? `Actual: ${account?.solUserMasked ?? "sin usuario"}. Vacío conserva el actual.` : undefined}
+							/>
+						</div>
 
-					<div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+						<fieldset className="flex flex-col gap-3">
+							<legend className="mb-2 text-sm font-semibold text-ink">Clave SOL</legend>
+							{account && (
+								<div className="flex items-center gap-3 rounded-lg border border-line bg-foreground-50 px-3.5 py-3 text-sm">
+									<span aria-hidden="true" className={`mono font-bold ${credentialTone[account.credential.status]}`}>
+										{credentialIcon[account.credential.status]}
+									</span>
+									<div>
+										<p className="font-semibold text-ink">{credentialStatusText(account)}</p>
+										<p className="text-xs text-muted-ink">Nunca se muestra. Solo puede reemplazarse.</p>
+									</div>
+								</div>
+							)}
+							{!account && <p className="text-xs text-muted-ink">Nunca se muestra. Solo puede reemplazarse.</p>}
+							<PasswordField />
+							<p className="flex gap-2.5 rounded-md bg-surface px-3 py-2.5 text-[13px] text-ink-2">
+								<span aria-hidden="true" className="mono font-semibold">
+									i
+								</span>
+								Se guarda cifrada. Después de guardarla nadie puede verla, tampoco los administradores. Cada cambio queda en el registro de auditoría.
+							</p>
+						</fieldset>
+						{extra}
+					</SheetBody>
+
+					<SheetFooter start={footerStart}>
 						<Button
 							variant="bordered"
 							onClick={() => {
@@ -176,13 +192,14 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 								onCancel();
 							}}
 							disabled={isSubmitting}
+							className="min-h-10 bg-paper"
 						>
 							Cancelar
 						</Button>
-						<Button type="submit" color="primary" isLoading={isSubmitting} disabled={isSubmitting}>
+						<Button type="submit" color="primary" isLoading={isSubmitting} disabled={isSubmitting} className="min-h-10">
 							{mode === "create" ? "Agregar cuenta" : values.solPassword ? "Guardar y reemplazar clave…" : "Guardar"}
 						</Button>
-					</div>
+					</SheetFooter>
 
 					<ResponsiveDialog
 						open={pendingReplace !== null}
@@ -206,7 +223,7 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 											const saved = await replace.mutateAsync(v.solPassword);
 											helpers.resetForm({ values: { ...v, solPassword: "" } });
 											setResult("Clave SOL reemplazada. Pruebe la conexión para reanudar el programador.");
-											onDone(saved);
+											onDone(saved, { replacedCredential: true });
 										} catch (error) {
 											helpers.setStatus(errorCopy(error));
 										} finally {
@@ -221,7 +238,7 @@ export const AccountForm = ({ mode, account, onDone, onCancel }: AccountFormProp
 					>
 						<p className="text-sm text-ink-2">La clave actual se descarta. La nueva se guarda cifrada y no se podrá volver a ver.</p>
 					</ResponsiveDialog>
-				</Form>
+				</SheetForm>
 			)}
 		</Formik>
 	);
@@ -287,12 +304,12 @@ export const TestConnectionControl = ({ account }: { account: AdminAccount }) =>
 };
 
 /** Desactivar detiene el programador; conserva inventario y auditoría. */
-export const AccountActiveControl = ({ account }: { account: AdminAccount }) => {
+export const AccountActiveControl = ({ account, compact = false }: { account: AdminAccount; compact?: boolean }) => {
 	const setActive = useSetAccountActive();
 	const [confirm, setConfirm] = useState(false);
 	return (
 		<>
-			<Button variant="bordered" color={account.active ? "danger" : "primary"} onClick={() => setConfirm(true)} disabled={setActive.isPending}>
+			<Button variant={compact ? "light" : "bordered"} color={account.active ? "danger" : "primary"} onClick={() => setConfirm(true)} disabled={setActive.isPending} className={compact ? "min-h-10 px-2 font-semibold" : undefined}>
 				{account.active ? "Desactivar cuenta" : "Activar cuenta"}
 			</Button>
 			{setActive.isError && <span className="text-sm text-err">{errorCopy(setActive.error).title}</span>}

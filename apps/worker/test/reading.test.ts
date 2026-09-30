@@ -9,6 +9,7 @@ test("explicit read persists safe content and does not repeat a remote call", { 
   const accountId = randomUUID(), itemId = randomUUID(), eventId = randomUUID();
   const roleId = randomUUID(), userId = randomUUID();
   let calls = 0;
+  let observations = 0;
   const processor = new ReadProcessor(db, {
     async readDetail() {
       calls++;
@@ -16,7 +17,7 @@ test("explicit read persists safe content and does not repeat a remote call", { 
         files: [{ kind: "generated_document" as const, codArchivo: null, numId: "fixture-document" },
           { kind: "attachment" as const, codArchivo: 0, name: "ficticio.pdf" }] };
     },
-    async observeState() { return 1; },
+    async observeState() { return ++observations === 1 ? 0 : 1; },
   });
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
@@ -32,6 +33,7 @@ test("explicit read persists safe content and does not repeat a remote call", { 
     await processor.process(accountId, eventId);
     await processor.process(accountId, eventId);
     assert.equal(calls, 1);
+    assert.equal(observations, 2);
     const rows: { safe_body: string; ind_estado: number; status: string; update_leido: number }[] = await db.query(
       "SELECT d.safe_body,i.ind_estado,e.status,e.update_leido FROM mail_read_events e JOIN mail_items i ON i.id=e.item_id JOIN mail_details d ON d.item_id=i.id WHERE e.id=?", [eventId]);
     assert.equal(rows[0].safe_body.includes("<script>"), false);
@@ -43,6 +45,21 @@ test("explicit read persists safe content and does not repeat a remote call", { 
       "SELECT kind,cod_archivo FROM file_assets WHERE item_id=? ORDER BY kind", [itemId]);
     assert.deepEqual(assets.map((asset) => [asset.kind, asset.cod_archivo]),
       [["attachment", "0"], ["generated_document", null]]);
+
+    const jsonItemId = randomUUID(), jsonEventId = randomUUID();
+    await db.query("INSERT INTO mail_items (id,account_id,tipo_msj,cod_mensaje,ind_estado,row_json) VALUES (?,?,?,?,?,?)",
+      [jsonItemId, accountId, 2, "456", 1, JSON.stringify({ codMensaje: 456 })]);
+    await db.query("INSERT INTO mail_read_events (id,item_id,account_id,actor_user_id,idempotency_key,status,remote_before) VALUES (?,?,?,?,?,?,?)",
+      [jsonEventId, jsonItemId, accountId, userId, "test-read-json", "pending", 1]);
+    await new ReadProcessor(db, {
+      async readDetail() { return { body: '{"text":"<script>bad()</script>"}', indTexto: "3", updateLeido: false }; },
+      async observeState() { return 1; },
+    }).process(accountId, jsonEventId);
+    const jsonBody: { original_body: string; safe_body: string }[] = await db.query(
+      "SELECT original_body,safe_body FROM mail_details WHERE item_id=?", [jsonItemId]);
+    assert.equal(jsonBody[0].original_body, '{"text":"<script>bad()</script>"}');
+    assert.equal(jsonBody[0].safe_body.includes("<script>"), false);
+    assert.equal(jsonBody[0].safe_body.includes("&lt;script&gt;"), true);
 
     const failedId = randomUUID();
     await db.query("INSERT INTO mail_read_events (id,item_id,account_id,actor_user_id,idempotency_key,status,remote_before) VALUES (?,?,?,?,?,?,?)",

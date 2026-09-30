@@ -124,7 +124,7 @@ export const ListTable = <T extends object>({
 					onSortChange={state.toggleSort}
 					hiddenColumns={state.hiddenColumns}
 					color="primary"
-					classNameContainer="bg-white border border-line p-0"
+					classNameContainer="bg-paper border border-line p-0"
 				>
 					<Table.Header>
 						<Table.HeaderRow valueCheck={allSelected} disabledCheck={selectableRows.length === 0} onChangeCheck={(checked) => state.setSelection(checked ? selectableRows.map((r) => ({ id: rowKey(r), name: rowName(r) })) : [])}>
@@ -185,7 +185,7 @@ export const ListFooter = ({
 			<label className="flex items-center gap-2">
 				<span>Por página</span>
 				<Select value={String(pageSize)} onValueChange={(v) => onChange(1, Number(v))}>
-					<SelectTrigger size="sm" className="h-9 min-w-20 bg-white" aria-label="Registros por página">
+					<SelectTrigger size="sm" className="h-9 min-w-20 bg-paper" aria-label="Registros por página">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
@@ -208,7 +208,7 @@ export const ListFooter = ({
 export const ColumnMenu = ({ columns, hidden, onToggle }: { columns: ColumnDef[]; hidden: string[]; onToggle: (id: string) => void }) => (
 	<DropdownMenu>
 		<DropdownMenuTrigger asChild>
-			<Button size="sm" variant="bordered" startContent={<Columns3 className="size-4" aria-hidden="true" />} className="bg-white">
+			<Button size="sm" variant="bordered" startContent={<Columns3 className="size-4" aria-hidden="true" />} className="bg-paper">
 				Columnas
 			</Button>
 		</DropdownMenuTrigger>
@@ -245,7 +245,7 @@ export const FilterSelect = <V extends string>({
 	className?: string;
 }) => (
 	<Select value={value} onValueChange={(v) => onChange(v as V)}>
-		<SelectTrigger size="sm" className={cn("h-9 w-full min-w-28 bg-white", className)} aria-label={label}>
+		<SelectTrigger size="sm" className={cn("h-9 w-full min-w-28 bg-paper dark:bg-paper dark:hover:bg-surface", className)} aria-label={label}>
 			<SelectValue />
 		</SelectTrigger>
 		<SelectContent>

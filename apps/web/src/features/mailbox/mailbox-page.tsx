@@ -89,12 +89,12 @@ const MobileList = ({ page, state, box, empty }: { page: MailPage | undefined; s
 	const accountId = useAccountId();
 	const rows = page?.rows ?? [];
 	const lastPage = page ? Math.max(1, Math.ceil(page.total / page.pageSize)) : 1;
-	if (page && rows.length === 0) return <div className="rounded-lg border border-line bg-white">{empty}</div>;
+	if (page && rows.length === 0) return <div className="rounded-lg border border-line bg-paper">{empty}</div>;
 	return (
 		<div className="flex flex-col gap-3">
-			<ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-white" aria-label={box === "messages" ? "Mensajes" : "Notificaciones"}>
+			<ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-paper" aria-label={box === "messages" ? "Mensajes" : "Notificaciones"}>
 				{rows.map((m) => (
-					<li key={m.id} className={m.remoteState === "unread" ? "bg-white" : "bg-row-read"}>
+					<li key={m.id} className={m.remoteState === "unread" ? "bg-paper" : "bg-row-read"}>
 						<Link to={`/c/${accountId}/${boxPath(box)}/${m.id}`} className="flex min-h-16 flex-col gap-1 px-4 py-3">
 							<span className="flex items-start gap-2">
 								<span aria-hidden="true" className={cn("mt-0.5 text-xs", m.remoteState === "unread" ? "text-brand" : "text-foreground-400")}>
@@ -235,7 +235,7 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 					rowName={(m) => m.subject}
 					selectable={selectable}
 					isSelectable={(m) => m.remoteState === "unread"}
-					rowClassName={(m) => (m.remoteState === "unread" ? "bg-white" : "bg-row-read")}
+					rowClassName={(m) => (m.remoteState === "unread" ? "bg-paper" : "bg-row-read")}
 					emptyContent={empty}
 					actionLabel="Detalle"
 					actionWidth={80}
@@ -295,7 +295,7 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 							</Table.BodyColumn>
 							<Table.BodyColumn className="mono text-xs text-ink-2">{dateOnly(m.publishedAtText)}</Table.BodyColumn>
 							<Table.BodyColumn>
-								<Button size="sm" variant="bordered" onClick={() => open(m)} className="min-h-9 bg-white">
+								<Button size="sm" variant="bordered" onClick={() => open(m)} className="min-h-9 bg-paper">
 									Ver<span className="sr-only"> detalle de «{m.subject}»</span>
 								</Button>
 							</Table.BodyColumn>

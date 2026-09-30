@@ -32,6 +32,9 @@ export function parseInventoryPage(response: PageResponse, box: MailBox): Parsed
   let data: unknown;
   try { data = JSON.parse(response.body); }
   catch { throw new AppError("schema_changed"); }
+  if (data && typeof data === "object" && (data as { rows?: unknown }).rows === null) {
+    throw new AppError("remote_session_expired");
+  }
   if (!data || typeof data !== "object" || !Array.isArray((data as { rows?: unknown }).rows)) {
     throw new AppError("schema_changed");
   }
@@ -93,3 +96,5 @@ export async function scanBox(
   }
   throw new AppError("incomplete_inventory");
 }
+
+export { SunatHttpSession, type SolLogin, type SolDetail, type SolFileResponse, type SolFolder, type SolLabel } from "./http.js";

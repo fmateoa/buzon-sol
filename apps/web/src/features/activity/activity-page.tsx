@@ -100,7 +100,7 @@ export const ActivityPage = () => {
 					(canRun || canSchedule) && (
 						<>
 							{canSchedule && (
-								<Link to={`/c/${accountId}/programador`} className="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-white px-4 text-sm font-medium text-ink">
+								<Link to={`/c/${accountId}/programador`} className="inline-flex min-h-11 items-center rounded-md border border-line-strong bg-paper px-4 text-sm font-medium text-ink">
 									Programador
 								</Link>
 							)}
@@ -109,7 +109,7 @@ export const ActivityPage = () => {
 									Reanudar desde pág. {resumable.resumeFrom.page}
 								</Button>
 							)}
-							{canRun && <Button variant="bordered" onClick={() => start.mutate()} disabled={credentialPaused || running || start.isPending || account.connection.pauseReason === "needs_credential"} isLoading={start.isPending} className="min-h-11 bg-white">
+							{canRun && <Button variant="bordered" onClick={() => start.mutate()} disabled={credentialPaused || running || start.isPending || account.connection.pauseReason === "needs_credential"} isLoading={start.isPending} className="min-h-11 bg-paper">
 								Consultar ahora
 							</Button>}
 						</>
@@ -161,7 +161,7 @@ export const ActivityPage = () => {
 										</span>
 										<StateTag state={run.state} extra={runStateText(run)} />
 										{run.resumeFrom && canRun && (
-											<Button size="sm" variant="bordered" onClick={() => resume.mutate(run.id)} disabled={credentialPaused || running} className="min-h-9 bg-white">
+											<Button size="sm" variant="bordered" onClick={() => resume.mutate(run.id)} disabled={credentialPaused || running} className="min-h-9 bg-paper">
 												Reanudar desde pág. {run.resumeFrom.page}
 											</Button>
 										)}

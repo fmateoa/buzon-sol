@@ -4,11 +4,11 @@ import { cn } from "@/lib/cn";
 export type NoticeTone = "info" | "partial" | "effect" | "error" | "success";
 
 const TONES: Record<NoticeTone, { icon: string; box: string; badge: string }> = {
-	info: { icon: "i", box: "border-line bg-white text-ink-2", badge: "bg-brand-soft text-brand" },
-	partial: { icon: "◐", box: "border-brand-line bg-brand-soft text-ink-2", badge: "bg-white text-brand" },
+	info: { icon: "i", box: "border-line bg-paper text-ink-2", badge: "bg-brand-soft text-brand" },
+	partial: { icon: "◐", box: "border-brand-line bg-brand-soft text-ink-2", badge: "bg-paper text-brand" },
 	effect: { icon: "!", box: "border-effect bg-effect-softer text-ink-2", badge: "bg-effect-soft text-effect-ink" },
-	error: { icon: "×", box: "border-[#d98a80] bg-err-soft text-ink-2", badge: "bg-white text-err" },
-	success: { icon: "✓", box: "border-[#c4e2cf] bg-ok-soft text-ink-2", badge: "bg-white text-ok" },
+	error: { icon: "×", box: "border-err-line bg-err-soft text-ink-2", badge: "bg-paper text-err" },
+	success: { icon: "✓", box: "border-ok-line bg-ok-soft text-ink-2", badge: "bg-paper text-ok" },
 };
 
 interface NoticeProps {
