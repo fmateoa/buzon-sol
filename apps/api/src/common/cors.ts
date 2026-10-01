@@ -2,7 +2,7 @@
 interface HookRequest { method: string; headers: Record<string, string | string[] | undefined> }
 interface HookReply { header(name: string, value: string): unknown; status(code: number): { send(payload?: unknown): unknown } }
 
-const ALLOWED_HEADERS = "Content-Type, X-CSRF-Token, X-Session-Mode, Authorization";
+const ALLOWED_HEADERS = "Content-Type, X-CSRF-Token, X-Session-Mode, Authorization, Idempotency-Key";
 const EXPOSED_HEADERS = "Content-Disposition";
 
 export function allowedOrigins(env: Record<string, string | undefined> = process.env): Set<string> {
