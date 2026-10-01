@@ -43,7 +43,7 @@ src/
 |---|---|
 | Consultas (lanzan `AppError`) | `getSession`, `getSummary`, `listMail`, `listFolders`, `listTags`, `getItemMetadata`, `getRemoteState`, `getActivity`, `listAdminAccounts`, `getAdminAccount`, `getSchedule`, `listAccountUsers`, `listScheduledRuns`, `listUsers`, `listRoles`, `listAdminAccountOptions`, `listAudit` |
 | Comandos semánticos (devuelven `CommandResult`) | `startInventory`, `resumeRun`, `readContent`, `downloadFile`, `setReviewed`, `replaceCredential`, `testConnection`, `saveSchedule`, `createAccount`, `updateAccount`, `setAccountActive`, `createUser`, `updateUser`, `setUserStatus`, `createRole`, `updateRole`, `setReadWarning`, `exportAuditCsv`, `login`, `logout` |
-| Errores (`AppErrorCode`) | `unauthenticated`, `forbidden`, `not_found`, `needs_credential`, `invalid_credential`, `paused`, `remote_session_expired`, `remote_unavailable`, `schema_changed`, `incomplete_inventory`, `conflict_running`, `validation` → textos en `lib/errors.ts` |
+| Errores (`AppErrorCode`) | `unauthenticated`, `forbidden`, `not_found`, `needs_credential`, `invalid_credential`, `paused`, `remote_session_expired`, `remote_disabled`, `remote_unavailable`, `schema_changed`, `incomplete_inventory`, `conflict_running`, `validation` → textos en `lib/errors.ts` |
 
 Reglas que el adaptador local cumple y que el backend deberá garantizar:
 

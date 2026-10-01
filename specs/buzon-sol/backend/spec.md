@@ -37,7 +37,7 @@ Los servicios del [contrato SUNAT](../sunat/contracts.md) fueron observados en e
 | Guardar programación | `configure_schedule` + cuenta visible | Valida horario, bandejas y capacidad del worker. |
 | Gestionar roles/usuarios; ver/exportar auditoría | Permisos administrativos específicos | Todas las modificaciones crean evento de auditoría. |
 
-Definir OpenAPI/DTOs y códigos de error en la fase de backend antes de conectar React. Los contratos han de distinguir `forbidden`, `not_found`, `needs_credential`, `invalid_credential`, `remote_session_expired`, `remote_unavailable`, `schema_changed`, `incomplete_inventory` y `conflict_running`. No responder con un buzón vacío ante fallo de autenticación remota.
+Definir OpenAPI/DTOs y códigos de error en la fase de backend antes de conectar React. Los contratos han de distinguir `forbidden`, `not_found`, `needs_credential`, `invalid_credential`, `remote_session_expired`, `remote_disabled` (consultas desactivadas en el servidor), `remote_unavailable` (fallo remoto), `schema_changed`, `incomplete_inventory` y `conflict_running`. No responder con un buzón vacío ante fallo de autenticación remota.
 
 ## 4. Programador y sincronización
 

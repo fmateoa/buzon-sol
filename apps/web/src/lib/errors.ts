@@ -14,6 +14,7 @@ const COPY: Record<AppErrorCode, ErrorCopy> = {
 	paused: { title: "Consulta en pausa", body: "Las acciones con SUNAT no están disponibles mientras la consulta esté en pausa." },
 	remote_session_expired: { title: "La sesión con SUNAT venció", body: "Se intentará iniciar una sesión nueva. Su avance está guardado." },
 	remote_unavailable: { title: "SUNAT no respondió", body: "Puede ser una interrupción temporal del servicio. Su avance está guardado." },
+	remote_disabled: { title: "Consultas desactivadas en este servidor", body: "Un administrador debe habilitar las consultas con SUNAT. Puede seguir viendo el inventario guardado." },
 	schema_changed: { title: "SUNAT cambió la respuesta", body: "buzon-sol no reconoció el formato recibido. Se avisó a los administradores." },
 	incomplete_inventory: { title: "Inventario parcial", body: "Los filtros solo incluyen lo ya inventariado." },
 	conflict_running: { title: "Ya hay una consulta en curso", body: "Espere a que termine la consulta actual de esta cuenta." },

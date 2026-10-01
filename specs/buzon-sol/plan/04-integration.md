@@ -3,7 +3,7 @@
 Conecta `apps/web` con `apps/api` por fases. La interfaz no cambia de contrato: las pantallas siguen consumiendo `BuzonAdapter` y la fuente de datos se elige al arrancar (`LocalAdapter` con datos ficticios o `HttpAdapter` contra `/api/v1`). El navegador nunca habla con SUNAT.
 
 - **INT-1 Gestión** (este documento): sesión, usuarios, roles, cuentas SUNAT, credencial, programador y auditoría.
-- **INT-2 Buzón** (hecho salvo avisos): resumen, bandejas, etiquetas, actividad, inventario, lectura, archivos y archivo de la cuenta. Sus consultas de solo lectura no contactan SUNAT; los comandos se encolan y dependen de las puertas del [plan SUNAT](02-sunat-integration.md): con la puerta cerrada la API responde `remote_unavailable`.
+- **INT-2 Buzón** (hecho salvo avisos): resumen, bandejas, etiquetas, actividad, inventario, lectura, archivos y archivo de la cuenta. Sus consultas de solo lectura no contactan SUNAT; los comandos se encolan y dependen de las puertas del [plan SUNAT](02-sunat-integration.md): el inventario con la puerta de transporte cerrada responde `remote_disabled`.
 
 ## Cómo ejecutarlo
 

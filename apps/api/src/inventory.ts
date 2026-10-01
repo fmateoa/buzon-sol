@@ -11,7 +11,7 @@ export class InventoryService {
   constructor(@Inject(DB) private readonly db: DataSource, @Inject(AuthService) private readonly auth: AuthService) {}
 
   private requireGate(): void {
-    if (process.env.SUNAT_TRANSPORT_VALIDATED !== "true") throw new AppError("remote_unavailable");
+    if (process.env.SUNAT_TRANSPORT_VALIDATED !== "true") throw new AppError("remote_disabled");
   }
 
   async start(actor: Principal, accountId: string): Promise<{ id: string; state: string }> {

@@ -180,6 +180,7 @@ paths:
     post:
       operationId: startInventory
       x-permission: run_inventory
+      description: Responde 503 con `remote_disabled` si las consultas están desactivadas en este servidor.
       responses:
         '201':
           description: Corrida persistida y encolada
@@ -193,7 +194,8 @@ paths:
       x-permission: run_inventory
       description: >-
         Inicia un inventario por cada cuenta activa que el usuario puede consultar. Cada cuenta tiene su propia
-        corrida y sesión; la que no puede iniciar informa su código y no detiene a las demás.
+        corrida y sesión; la que no puede iniciar informa su código y no detiene a las demás. Responde 503 con
+        `remote_disabled` si las consultas están desactivadas en este servidor.
       responses:
         '201':
           description: Resultado por cuenta
@@ -711,7 +713,7 @@ components:
       properties:
         code:
           type: string
-          enum: [unauthenticated, forbidden, not_found, validation, needs_credential, invalid_credential, remote_session_expired, remote_unavailable, schema_changed, incomplete_inventory, conflict_running, paused, storage_unavailable, internal]
+          enum: [unauthenticated, forbidden, not_found, validation, needs_credential, invalid_credential, remote_session_expired, remote_disabled, remote_unavailable, schema_changed, incomplete_inventory, conflict_running, paused, storage_unavailable, internal]
     LoginInput:
       type: object
       required: [email, password]

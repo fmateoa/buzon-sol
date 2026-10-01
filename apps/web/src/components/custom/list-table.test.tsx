@@ -1,34 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { Fragment, isValidElement } from "react";
+import { expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { withoutHiddenCells, type ColumnDef } from "./list-table";
 
-const COLUMNS: ColumnDef[] = [
-	{ id: "a", header: "A" },
-	{ id: "b", header: "B" },
-	{ id: "c", header: "C" },
-];
+const columns: ColumnDef[] = [{ id: "a", header: "A" }, { id: "b", header: "B" }, { id: "c", header: "C" }];
 
-const texts = (hidden: string[]) => {
-	const cells = (
-		<>
-			<td>a</td>
-			{null}
-			<td>c</td>
-			<td>acciones</td>
-		</>
-	);
-	const { container } = render(<table><tbody><tr>{withoutHiddenCells(cells, COLUMNS, hidden)}</tr></tbody></table>);
-	return [...container.querySelectorAll("td")].map((td) => td.textContent);
-};
-
-describe("withoutHiddenCells", () => {
-	it("sin columnas ocultas deja las celdas como vienen", () => {
-		expect(texts([])).toEqual(["a", "c", "acciones"]);
-	});
-
-	it("quita la celda de la columna oculta y conserva la de acciones", () => {
-		expect(texts(["a"])).toEqual(["c", "acciones"]);
-		expect(texts(["c"])).toEqual(["a", "acciones"]);
-		expect(texts(["a", "b", "c"])).toEqual(["acciones"]);
-	});
+it("oculta la columna elegida y conserva la celda de acciones dentro del fragmento", () => {
+	for (const hidden of ["a", "b", "c"]) {
+		const cells = <><td>A</td><td>B</td><td>C</td><td>Acciones</td></>;
+		const filtered = withoutHiddenCells(cells, columns, [hidden]);
+		expect(isValidElement(filtered) && filtered.type).toBe(Fragment);
+		const { container } = render(<table><tbody><tr>{filtered}</tr></tbody></table>);
+		expect([...container.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(
+			["A", "B", "C"].filter((value) => value.toLowerCase() !== hidden).concat("Acciones"),
+		);
+	}
 });

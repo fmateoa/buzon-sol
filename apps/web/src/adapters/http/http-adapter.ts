@@ -172,7 +172,7 @@ const run = async <T>(fn: () => Promise<T>): Promise<CommandResult<T>> => {
 };
 
 /** Códigos con los que el worker puede cerrar un trabajo; lo demás se muestra como «SUNAT no respondió». */
-const JOB_ERRORS: readonly AppErrorCode[] = ["forbidden", "not_found", "needs_credential", "invalid_credential", "paused", "remote_session_expired", "remote_unavailable", "schema_changed", "conflict_running"];
+const JOB_ERRORS: readonly AppErrorCode[] = ["forbidden", "not_found", "needs_credential", "invalid_credential", "paused", "remote_session_expired", "remote_disabled", "remote_unavailable", "schema_changed", "conflict_running"];
 const jobError = (code: string | null | undefined) => new AppError(JOB_ERRORS.find((known) => known === code) ?? "remote_unavailable");
 
 /** Entrega el archivo al navegador como descarga; el contenido nunca se abre dentro de la app. */
@@ -619,7 +619,7 @@ export class HttpAdapter implements BuzonAdapter {
 
 	/**
 	 * Encola la prueba y espera su resultado: el worker inicia sesión en SUNAT y lista ambas
-	 * bandejas, sin abrir ningún elemento. Sin la puerta del servidor responde `remote_unavailable`.
+	 * bandejas, sin abrir ningún elemento. Sin la puerta del servidor responde `remote_disabled`.
 	 */
 	testConnection = (accountId: AccountId) =>
 		run(async (): Promise<CredentialTestResult> => {

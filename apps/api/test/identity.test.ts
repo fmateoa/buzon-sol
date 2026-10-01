@@ -151,7 +151,7 @@ test("API enforces account scope and immediate revocation", { skip: process.env.
     assert.equal((await request("GET", `/api/v1/accounts/${createdAccountId}/schedule`, adminToken)).json().state, "disabled");
     assert.equal((await request("PATCH", `/api/v1/accounts/${createdAccountId}/schedule`, adminToken,
       { ...schedule, state: "active" })).json().code, "remote_unavailable");
-    assert.equal((await request("POST", `/api/v1/accounts/${createdAccountId}/inventory`, adminToken)).json().code, "remote_unavailable");
+    assert.equal((await request("POST", `/api/v1/accounts/${createdAccountId}/inventory`, adminToken)).json().code, "remote_disabled");
     if (process.env.BUZON_TEST_REDIS === "1") {
       const { Queue, QueueEvents } = await import("bullmq");
       const { INVENTORY_QUEUE, redisOptions } = await import("@buzon-sol/domain");

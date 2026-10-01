@@ -25,7 +25,7 @@ export class SafeErrorFilter implements ExceptionFilter {
       unauthenticated: 401, forbidden: 403, not_found: 404, validation: 400,
       conflict_running: 409, needs_credential: 409, invalid_credential: 409,
       paused: 409, incomplete_inventory: 409, remote_session_expired: 502,
-      remote_unavailable: 502, schema_changed: 502, storage_unavailable: 503,
+      remote_disabled: 503, remote_unavailable: 502, schema_changed: 502, storage_unavailable: 503,
     };
     if (error instanceof AppError) {
       reply.status(status[error.code] ?? 500).send({ code: error.code });

@@ -8,6 +8,7 @@ const app = () => {
   f.addHook("onRequest", cookieSessionHook);
   f.get("/x", async (req) => ({ auth: req.headers.authorization ?? null }));
   f.post("/x", async (req) => ({ auth: req.headers.authorization ?? null }));
+  f.patch("/x", async (req) => ({ auth: req.headers.authorization ?? null }));
   f.post("/auth/login", async (req) => ({ auth: req.headers.authorization ?? null }));
   f.post("/set", async (_req, reply) => { setSessionCookies(reply, "t".repeat(43), new Date(Date.now() + 60_000)); return {}; });
   f.post("/clear", async (_req, reply) => { clearSessionCookies(reply); return {}; });
@@ -24,6 +25,7 @@ test("la cookie de sesión se convierte en Bearer; los POST exigen CSRF", async 
   const cookie = "bz_session=tok; bz_csrf=abc";
   assert.equal((await f.inject({ method: "GET", url: "/x", headers: { cookie } })).json().auth, "Bearer tok");
   assert.equal((await f.inject({ method: "POST", url: "/x", headers: { cookie } })).statusCode, 403);
+  assert.equal((await f.inject({ method: "PATCH", url: "/x", headers: { cookie } })).statusCode, 403);
   assert.equal((await f.inject({ method: "POST", url: "/x", headers: { cookie, "x-csrf-token": "otro" } })).statusCode, 403);
   const ok = await f.inject({ method: "POST", url: "/x", headers: { cookie, "x-csrf-token": "abc" } });
   assert.equal(ok.json().auth, "Bearer tok");
@@ -44,4 +46,20 @@ test("las cookies de sesión son HttpOnly y SameSite=Strict; la CSRF es legible;
   assert.doesNotMatch(csrf, /HttpOnly/);
   const cleared = (await f.inject({ method: "POST", url: "/clear" })).headers["set-cookie"] as string[];
   assert.ok(cleared.every((c) => /Expires=Thu, 01 Jan 1970/.test(c)));
+});
+
+test("producción marca ambas cookies como Secure", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousOverride = process.env.SESSION_COOKIE_SECURE;
+  process.env.NODE_ENV = "production";
+  delete process.env.SESSION_COOKIE_SECURE;
+  try {
+    const set = (await app().inject({ method: "POST", url: "/set" })).headers["set-cookie"] as string[];
+    assert.ok(set.every((value) => /; Secure(?:;|$)/.test(value)));
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousOverride === undefined) delete process.env.SESSION_COOKIE_SECURE;
+    else process.env.SESSION_COOKIE_SECURE = previousOverride;
+  }
 });

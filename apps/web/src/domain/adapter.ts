@@ -49,6 +49,7 @@ export type AppErrorCode =
 	| "paused"
 	| "remote_session_expired"
 	| "remote_unavailable"
+	| "remote_disabled"
 	| "schema_changed"
 	| "incomplete_inventory"
 	| "conflict_running"

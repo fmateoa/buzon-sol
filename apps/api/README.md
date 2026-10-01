@@ -57,7 +57,7 @@ Cada puerta vale solo con `"true"` explícito y la activa el operador del despli
 | `SUNAT_CRON_VALIDATED` | Bucle del programador y `state=active` en la API | S-02/S-05 repetidos |
 | `SUNAT_PASSIVE_START_VALIDATED` | Disparar sin `remote_effect_accepted` | S-04 |
 
-Con `SUNAT_CRON_VALIDATED` y `SUNAT_TRANSPORT_VALIDATED`, la API acepta `state=active` si la última credencial de la cuenta es válida y calcula el primer disparo en hora de Lima; sin ellas responde `remote_unavailable`. Mientras `SUNAT_PASSIVE_START_VALIDATED` no esté fijada, el programador pausa (`remote_effect_not_accepted`) y avisa a administradores si la programación no tiene `remoteEffectAccepted`.
+Con `SUNAT_CRON_VALIDATED` y `SUNAT_TRANSPORT_VALIDATED`, la API acepta `state=active` si la última credencial de la cuenta es válida y calcula el primer disparo en hora de Lima; sin ellas responde `remote_unavailable`. `POST /accounts/:id/inventory` y `POST /inventory` responden `remote_disabled` (503) cuando la puerta de transporte está cerrada, para distinguirlo de un fallo de SUNAT. Mientras `SUNAT_PASSIVE_START_VALIDATED` no esté fijada, el programador pausa (`remote_effect_not_accepted`) y avisa a administradores si la programación no tiene `remoteEffectAccepted`.
 
 La exploración autorizada con cuentas reales usa `scripts/sunat-test-credential.ps1` (entrada oculta, cifrado DPAPI del usuario local) y `scripts/run-sunat-probe.ps1 -Mode <modo>`; solo emiten resultados redactados. `-Mode e2e-archive -Names A,B [-Items 5] [-Files]` ejecuta contra la base local un inventario y un lote de archivo por cuenta que abre únicamente elementos ya leídos; `unexpectedReads` debe ser 0. No copiar credenciales al chat ni a archivos del repositorio.
 

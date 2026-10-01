@@ -72,6 +72,10 @@ describe("HttpAdapter · sesión", () => {
 });
 
 describe("HttpAdapter · gestión", () => {
+	it("distingue consultas desactivadas de una falla de SUNAT", async () => {
+		const { adapter } = await signedIn({ "POST /accounts/a1/inventory": () => ({ status: 503, json: { code: "remote_disabled" } }) });
+		expect(await adapter.startInventory("a1" as AccountId)).toMatchObject({ ok: false, error: { code: "remote_disabled" } });
+	});
 
 	it("probar conexión encola la prueba y espera el resultado del worker", async () => {
 		const finishedAt = new Date().toISOString();

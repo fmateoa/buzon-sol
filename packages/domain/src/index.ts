@@ -22,7 +22,7 @@ export type SyncState = "pending" | "running" | "complete" | "partial" | "retryi
 export type ErrorCode =
   | "unauthenticated" | "forbidden" | "not_found" | "needs_credential"
   | "invalid_credential" | "paused" | "remote_session_expired"
-  | "remote_unavailable" | "schema_changed" | "incomplete_inventory"
+  | "remote_disabled" | "remote_unavailable" | "schema_changed" | "incomplete_inventory"
   | "conflict_running" | "validation" | "storage_unavailable";
 
 export class AppError extends Error {

@@ -125,7 +125,7 @@ test("mailbox archive settings, status and multi-account commands respect permis
     // Commands stay closed until the operator opens each gate.
     const archiveUrl = (id: string) => `/api/v1/accounts/${id}/archive`;
     assert.equal((await request("POST", archiveUrl(a), operator.token, {})).json().code, "remote_unavailable");
-    assert.equal((await request("POST", "/api/v1/inventory", operator.token)).json().code, "remote_unavailable");
+    assert.equal((await request("POST", "/api/v1/inventory", operator.token)).json().code, "remote_disabled");
     assert.equal((await request("POST", archiveUrl(a), viewer.token, {})).statusCode, 403);
     assert.equal((await request("POST", "/api/v1/inventory", viewer.token)).statusCode, 403);
 

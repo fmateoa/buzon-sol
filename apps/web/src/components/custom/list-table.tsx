@@ -42,16 +42,13 @@ export type ColumnDef = {
 /** Fondo de las filas del cuerpo: blanco, con gris suave al pasar el cursor (el encabezado conserva el de lizaui). */
 export const TABLE_ROW_CLASS = "bg-paper hover:bg-surface-2";
 
-/**
- * lizaui oculta el encabezado de una columna oculta pero no sus celdas: sin esto las filas se
- * corren una posición. `renderCells` devuelve un fragmento con una celda por columna (mismo orden
- * que `columns`, luego la de acciones); aquí se descartan las de las columnas ocultas.
- */
+/** El fragmento conserva la responsabilidad de ocultar celdas aquí; entregar un array a lizaui
+ * haría que Table.BodyRow aplicase además su propio filtro y eliminase una segunda celda. */
 export const withoutHiddenCells = (cells: ReactNode, columns: ColumnDef[], hidden: string[]): ReactNode => {
 	if (hidden.length === 0 || !isValidElement(cells)) return cells;
 	const raw = (cells as ReactElement<{ children?: ReactNode }>).props.children;
 	if (!Array.isArray(raw)) return cells;
-	return Children.toArray(raw.filter((_, index) => !(index < columns.length && hidden.includes(columns[index]!.id))));
+	return <>{Children.toArray(raw.filter((_, index) => !(index < columns.length && hidden.includes(columns[index]!.id))))}</>;
 };
 
 /**

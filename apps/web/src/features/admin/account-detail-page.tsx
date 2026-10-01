@@ -70,7 +70,7 @@ export const AccountAdminDetailPage = () => {
 				}
 			/>
 			<Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="gap-0">
-				{/* Altura fija en escritorio (botones de 40 px + 10 px): con o sin las acciones del programador la cabecera no cambia de alto. */}
+				{/* Reservar altura para las acciones mantiene las pestañas y el contenido en su sitio en móvil y escritorio. */}
 				<div className="flex flex-col-reverse gap-3 border-b border-line-soft sm:min-h-[3.125rem] sm:flex-row sm:items-end sm:justify-between">
 					<UnderlineTabsList aria-label="Secciones de la cuenta" className="overflow-x-auto">
 						<UnderlineTabsTrigger value="datos">Datos y credencial</UnderlineTabsTrigger>
@@ -78,7 +78,7 @@ export const AccountAdminDetailPage = () => {
 						<UnderlineTabsTrigger value="archivo">Archivo</UnderlineTabsTrigger>
 						<UnderlineTabsTrigger value="usuarios">Usuarios con acceso</UnderlineTabsTrigger>
 					</UnderlineTabsList>
-					<div ref={setActionsSlot} className="flex flex-wrap gap-2 empty:hidden sm:pb-2.5" />
+					<div ref={setActionsSlot} className="flex min-h-10 flex-wrap gap-2 sm:min-h-0 sm:pb-2.5" />
 				</div>
 				<TabsContent value="datos" className="mt-4 flex flex-col gap-5">
 					<Section title="Datos y Clave SOL">
