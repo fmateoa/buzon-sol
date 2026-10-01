@@ -1,26 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { AppError, nextRuns, validateSchedule } from "@buzon-sol/domain";
-import { DataSource, EntityManager } from "typeorm";
+import { AppError, logEvent, nextRuns, validateSchedule } from "@buzon-sol/domain";
+import { DataSource } from "typeorm";
+import { runBoxes } from "./inventory.js";
+import { noticeAdmins } from "./notices.js";
 
 type Candidate = { account_id: string };
 type Schedule = {
   id: string; state: string; next_run_at: Date | null; frequency: string;
   days_json: string | string[]; window_start: string; window_end: string;
+  boxes_json: string | string[]; remote_effect_accepted: number;
 };
 export type EnqueueInventory = (accountId: string, runId: string) => Promise<void>;
 
 const parseJson = (value: string | string[]): unknown => typeof value === "string" ? JSON.parse(value) : value;
-
-async function noticeAdmins(manager: EntityManager, accountId: string, kind: string): Promise<void> {
-  const admins: { id: string }[] = await manager.query(
-    `SELECT DISTINCT u.id FROM app_users u JOIN roles r ON r.id=u.role_id
-     JOIN role_permissions p ON p.role_id=r.id AND p.permission='manage_accounts'
-     WHERE u.status='active' AND (r.all_accounts=true OR EXISTS
-       (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=?))`, [accountId]);
-  for (const admin of admins) await manager.query(
-    "INSERT INTO in_app_notices (id,account_id,user_id,kind) VALUES (?,?,?,?)",
-    [randomUUID(), accountId, admin.id, kind]);
-}
 
 /** One scheduler pass. An account row lock coordinates concurrent schedulers and manual starts. */
 export async function dispatchDueSchedules(
@@ -51,6 +43,14 @@ export async function dispatchDueSchedules(
         await noticeAdmins(manager, candidate.account_id, "needs_credential");
         return null;
       }
+      // Until S-04 proves a passive start, logging in may mark the first item read; an admin must accept that.
+      if (process.env.SUNAT_PASSIVE_START_VALIDATED !== "true" && !schedule.remote_effect_accepted) {
+        await manager.query(
+          "UPDATE sync_schedules SET state='paused',pause_reason='remote_effect_not_accepted',next_run_at=NULL WHERE id=?",
+          [schedule.id]);
+        await noticeAdmins(manager, candidate.account_id, "remote_effect_not_accepted");
+        return null;
+      }
       const input = validateSchedule({ frequency: schedule.frequency, days: parseJson(schedule.days_json),
         windowStart: String(schedule.window_start).slice(0, 5),
         windowEnd: String(schedule.window_end).slice(0, 5) });
@@ -61,9 +61,10 @@ export async function dispatchDueSchedules(
         "SELECT id FROM sync_runs WHERE account_id=? AND state IN ('pending','running') LIMIT 1", [candidate.account_id]);
       if (active.length) return null;
       const id = randomUUID();
+      const boxes = runBoxes(schedule.boxes_json);
       await manager.query(
-        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page) VALUES (?,?,?,'pending',1,1)",
-        [id, candidate.account_id, "scheduled"]);
+        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page,boxes_json) VALUES (?,?,?,'pending',?,1,?)",
+        [id, candidate.account_id, "scheduled", boxes[0] === "messages" ? 1 : 2, JSON.stringify(boxes)]);
       await manager.query(
         "INSERT INTO audit_events (id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?)",
         [randomUUID(), candidate.account_id, "schedule_due", "sync_run", id]);
@@ -74,6 +75,7 @@ export async function dispatchDueSchedules(
       await enqueue(candidate.account_id, runId);
       dispatched++;
     } catch {
+      logEvent("error", "schedule_enqueue_failed", { accountId: candidate.account_id, runId });
       await db.transaction(async (manager) => {
         await manager.query(
           "UPDATE sync_runs SET state='partial',error_code='remote_unavailable' WHERE id=? AND state='pending'", [runId]);

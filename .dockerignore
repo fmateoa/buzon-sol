@@ -1,0 +1,9 @@
+**/node_modules
+.git
+.claude
+.playwright-cli
+.env*
+apps/web/*
+!apps/web/package.json
+specs
+scripts

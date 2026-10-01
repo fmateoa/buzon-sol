@@ -23,8 +23,6 @@ export interface SolFileResponse { status: number; contentType: string; bytes: B
   verifiedGeneratedDocument?: boolean }
 /** Filtros remotos observados; el filtro exacto por estado se aplica localmente sobre `indEstado`. */
 export interface ListFilter { desAsunto?: string; tipoOrden?: string; codEtiqueta?: string }
-export interface SolFolder { codCarpeta: string; nomCarpeta: string; cantMensajes: number | null }
-export interface SolLabel { codEtiqueta: string; descEtiqueta: string; colorEtiqueta: string | null; cantEtiqueta: number | null }
 
 const unescapeAttribute = (value: string): string => value.replace(/&amp;|&#38;|&#x26;/gi, "&");
 
@@ -209,47 +207,26 @@ export class SunatHttpSession implements InventoryClient {
     return "valid";
   }
 
-  async listFolders(): Promise<SolFolder[]> {
+  async listFolders(): Promise<PageResponse> {
     const { response } = await this.request(sunatUrl(FOLDERS), { headers: this.visorHeaders() });
-    const raw = await this.jsonResponse(response);
-    if (!Array.isArray(raw)) throw new AppError("schema_changed");
-    return raw.map((entry) => {
-      if (!entry || typeof entry !== "object") throw new AppError("schema_changed");
-      const folder = entry as Record<string, unknown>;
-      if ((typeof folder.codCarpeta !== "string" && typeof folder.codCarpeta !== "number") ||
-          typeof folder.nomCarpeta !== "string") throw new AppError("schema_changed");
-      return { codCarpeta: String(folder.codCarpeta), nomCarpeta: folder.nomCarpeta,
-        cantMensajes: typeof folder.cantMensajes === "number" ? folder.cantMensajes : null };
-    });
+    return this.rawResponse(response);
   }
 
-  listLabels(): SolLabel[] {
+  async visorHtml(): Promise<PageResponse> {
     if (this.closed || !this.masterHtml) throw new AppError("remote_unavailable");
-    const literal = this.masterHtml.match(/var\s+listEtiquetas\s*=\s*\$\.parseJSON\(\s*'((?:\\.|[^'\\])*)'\s*\)/s)?.[1];
-    if (!literal) throw new AppError("schema_changed");
-    let raw: unknown;
-    try { raw = JSON.parse(literal); }
-    catch { throw new AppError("schema_changed"); }
-    if (!Array.isArray(raw)) throw new AppError("schema_changed");
-    return raw.map((entry) => {
-      if (!entry || typeof entry !== "object") throw new AppError("schema_changed");
-      const label = entry as Record<string, unknown>;
-      if ((typeof label.codEtiqueta !== "string" && typeof label.codEtiqueta !== "number") ||
-          typeof label.descEtiqueta !== "string") throw new AppError("schema_changed");
-      return { codEtiqueta: String(label.codEtiqueta), descEtiqueta: label.descEtiqueta,
-        colorEtiqueta: typeof label.colorEtiqueta === "string" ? label.colorEtiqueta : null,
-        cantEtiqueta: typeof label.cantEtiqueta === "number" ? label.cantEtiqueta : null };
-    });
+    return { contentType: "text/html", body: this.masterHtml };
   }
 
-  async consultAlerts(): Promise<unknown[]> {
+  async consultAlerts(): Promise<PageResponse> {
     const { response } = await this.request(sunatUrl(ALERTS), { method: "POST", body: new URLSearchParams(),
       headers: this.visorHeaders() });
-    const raw = await this.jsonResponse(response);
-    if (!raw || typeof raw !== "object" || !Array.isArray((raw as { listaAlertas?: unknown }).listaAlertas)) {
-      throw new AppError("schema_changed");
-    }
-    return (raw as { listaAlertas: unknown[] }).listaAlertas;
+    return this.rawResponse(response);
+  }
+
+  private async rawResponse(response: Response): Promise<PageResponse> {
+    if (response.status !== 200) throw new AppError("remote_unavailable");
+    try { return { contentType: response.headers.get("Content-Type") ?? "", body: await response.text() }; }
+    catch { throw new AppError("remote_unavailable"); }
   }
 
   private async jsonResponse(response: Response): Promise<unknown> {

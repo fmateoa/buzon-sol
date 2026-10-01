@@ -50,21 +50,6 @@ export class IdentityService {
     );
   }
 
-  async listMail(actor: Principal, accountId: string, offset = 0, limit = 100): Promise<{ id: string; tipoMsj: number; codMensaje: string; indEstado: number; reviewed: boolean }[]> {
-    this.auth.requireAccount(actor, "view_mailbox", validId(accountId));
-    if (!Number.isInteger(offset) || offset < 0 || offset > 1_000_000 || !Number.isInteger(limit) || limit < 1 || limit > 200) throw new AppError("validation");
-    const accounts: { id: string }[] = await this.db.query("SELECT id FROM sunat_accounts WHERE id=?", [accountId]);
-    if (!accounts.length) throw new AppError("not_found");
-    const rows: { id: string; tipoMsj: number; codMensaje: string; indEstado: number; reviewed: number }[] = await this.db.query(
-      `SELECT m.id,m.tipo_msj AS tipoMsj,m.cod_mensaje AS codMensaje,m.ind_estado AS indEstado,
-        COALESCE(r.reviewed,false) AS reviewed
-       FROM mail_items m LEFT JOIN mail_reviews r ON r.item_id=m.id AND r.user_id=?
-       WHERE m.account_id=? ORDER BY m.last_seen_at DESC,m.id DESC LIMIT ? OFFSET ?`,
-      [actor.id, accountId, limit, offset],
-    );
-    return rows.map((row) => ({ ...row, reviewed: Number(row.reviewed) === 1 }));
-  }
-
   async setReviewed(actor: Principal, accountId: string, itemId: string, reviewed: unknown): Promise<void> {
     this.auth.requireAccount(actor, "mark_reviewed", validId(accountId));
     validId(itemId);

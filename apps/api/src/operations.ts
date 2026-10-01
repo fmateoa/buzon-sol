@@ -13,7 +13,10 @@ export class OperationsService {
     const runs = await this.db.query(
       `SELECT id,mode,state,started_at AS startedAt,finished_at AS finishedAt,
        resume_box AS resumeBox,resume_page AS resumePage,
-       pause_reason AS pauseReason,error_code AS errorCode
+       pause_reason AS pauseReason,error_code AS errorCode,boxes_json AS boxes,
+       folders_state AS foldersState,labels_state AS labelsState,alerts_state AS alertsState,
+       JSON_LENGTH(alerts_json) AS alertCount,reauth_count AS reauthCount,
+       new_messages AS newMessages,new_notifications AS newNotifications
        FROM sync_runs WHERE account_id=?
        ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,started_at DESC,id DESC LIMIT 20`, [accountId]);
     const current = runs[0] ?? null;
@@ -79,7 +82,7 @@ export class OperationsService {
   async notices(actor: Principal) {
     if (!actor.permissions.includes("view_mailbox") && !actor.permissions.includes("manage_accounts")) throw new AppError("forbidden");
     return this.db.query(
-      `SELECT n.id,n.account_id AS accountId,n.kind,n.created_at AS at,n.read_at AS readAt
+      `SELECT n.id,n.account_id AS accountId,n.kind,n.payload_json AS counts,n.created_at AS at,n.read_at AS readAt
        FROM in_app_notices n WHERE n.user_id=? AND (?=true OR EXISTS
          (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=n.account_id))
        ORDER BY n.created_at DESC LIMIT 100`, [actor.id, actor.allAccounts, actor.roleId]);

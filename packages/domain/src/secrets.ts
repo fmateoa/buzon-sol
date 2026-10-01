@@ -28,6 +28,13 @@ export function encryptForWorker(plaintext: string, publicKeyPem: string, keyId:
   return Buffer.from(JSON.stringify(envelope));
 }
 
+/** The key identifier recorded in an envelope; it selects which worker private key opens it. */
+export function envelopeKeyId(encrypted: Buffer): string {
+  const envelope = JSON.parse(encrypted.toString("utf8")) as Partial<SecretEnvelope>;
+  if (envelope.version !== 1 || typeof envelope.keyId !== "string" || !envelope.keyId) throw new Error("Unsupported secret envelope");
+  return envelope.keyId;
+}
+
 export function decryptInWorker(encrypted: Buffer, privateKeyPem: string): string {
   const envelope = JSON.parse(encrypted.toString("utf8")) as SecretEnvelope;
   if (envelope.version !== 1) throw new Error("Unsupported secret envelope");

@@ -30,8 +30,9 @@ export class InventoryService {
       if (existing.length) return existing[0];
       const id = randomUUID();
       await manager.query(
-        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page) VALUES (?,?,?,?,?,?)",
-        [id, accountId, "manual", "pending", 1, 1],
+        // A manual run covers both boxes; scheduled runs use the configured boxes.
+        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page,boxes_json) VALUES (?,?,?,?,?,?,?)",
+        [id, accountId, "manual", "pending", 1, 1, JSON.stringify(["messages", "notifications"])],
       );
       await manager.query(
         "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",

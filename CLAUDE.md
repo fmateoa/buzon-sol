@@ -7,7 +7,7 @@ Guía de entrada para agentes que desarrollen Buzón SOL en este repositorio.
 Especificaciones en `specs/buzon-sol/` (en español) para **Buzón SOL v2**, una aplicación interna multiusuario que inventaría y conserva Mensajes y Notificaciones del buzón electrónico SOL de N cuentas SUNAT. Monorepo pnpm (`pnpm-workspace.yaml`: `apps/*`, `packages/*`); no mezclar gestores de paquetes/lockfiles.
 
 - **Frontend (FE-0 a FE-5 hechos):** `apps/web`, con datos ficticios y adaptador local tipado. Ver [apps/web/README.md](apps/web/README.md) para estructura, contrato `BuzonAdapter`, decisiones y pendientes de API.
-- **Backend:** aún no existe (`apps/api`, `apps/worker`, `packages/*` según el stack previsto).
+- **Backend (BE-0 a BE-6 hechos salvo lo bloqueado por SUNAT):** `apps/api`, `apps/worker`, `packages/domain`, `packages/sunat-adapter`, `packages/storage`. **Hasta dónde se llegó:** sección «Seguimiento de avance» de [plan/backend.md](specs/buzon-sol/plan/backend.md#seguimiento-de-avance); leerla antes de continuar y actualizar sus checks en el mismo commit. Configuración, contrato HTTP y pruebas de integración en [apps/api/README.md](apps/api/README.md) (pruebas: `docker compose -f compose.test.yml up -d`; desarrollo: `node scripts/dev-env.mjs` y `docker compose -f compose.dev.yml -p buzon-dev up -d --build`). El transporte SUNAT sigue `NO_VALIDADO`: los trabajos remotos están tras puertas `SUNAT_*` que no se fijan para simular validación.
 - Comandos desde la raíz: `pnpm dev`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Prueba única: `pnpm --filter @buzon-sol/web exec vitest run <ruta>`.
 
 `.playwright-cli/` (ignorado por git) contiene artefactos de la exploración con Playwright; no son código del proyecto.

@@ -20,6 +20,14 @@ export interface ParsedPage {
 export interface InventoryClient {
   /** A session isolated to one account; inventory has no detail method. */
   listPage(box: MailBox, page: number): Promise<PageResponse>;
+  /** C-03 `listarCarpetas`. Optional: a failure marks the catalog unavailable and never stops the inventory. */
+  listFolders?(): Promise<PageResponse>;
+  /** `/visor/master` requested as HTML without running its scripts; source of `listEtiquetas`. */
+  visorHtml?(): Promise<PageResponse>;
+  /** C-04 `consultarAlertas`. */
+  consultAlerts?(): Promise<PageResponse>;
+  /** Starts a new session for the same account after `remote_session_expired`; throws `invalid_credential` if rejected. */
+  reauthenticate?(): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -98,4 +106,5 @@ export async function scanBox(
   throw new AppError("incomplete_inventory");
 }
 
-export { SunatHttpSession, type SolLogin, type SolDetail, type SolFileResponse, type SolFolder, type SolLabel, type ListFilter } from "./http.js";
+export { parseFolders, parseLabels, parseAlerts, type SunatFolder, type SunatLabel, type SunatAlerts } from "./catalogs.js";
+export { SunatHttpSession, type SolLogin, type SolDetail, type SolFileResponse, type ListFilter } from "./http.js";

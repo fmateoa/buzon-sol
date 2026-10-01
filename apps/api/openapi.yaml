@@ -68,14 +68,60 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+        - { name: box, in: query, schema: { type: string, enum: [all, messages, notifications], default: all } }
+        - name: state
+          in: query
+          description: unread es indEstado=0; cualquier otro valor observado cuenta como leído
+          schema: { type: string, enum: [all, unread, read], default: all }
+        - { name: review, in: query, schema: { type: string, enum: [all, reviewed, pending], default: all } }
+        - { name: q, in: query, description: Texto literal en asunto o remitente, schema: { type: string, maxLength: 200 } }
+        - { name: dateFrom, in: query, description: Día inclusivo en America/Lima, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, description: Día inclusivo en America/Lima, schema: { type: string, format: date } }
+        - { name: folder, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: label, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: sort, in: query, schema: { type: string, enum: [publishedAt, subject, sender, remoteState], default: publishedAt } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
       responses:
         '200':
-          description: Metadatos persistidos; reviewed es privado del usuario
+          description: Metadatos persistidos; nunca consulta SUNAT ni abre detalle. reviewed es privado del usuario
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/MailItem' }
+                type: object
+                required: [rows, total, offset, limit]
+                properties:
+                  rows:
+                    type: array
+                    items: { $ref: '#/components/schemas/MailItem' }
+                  total: { type: integer, description: Filas persistidas que cumplen el filtro }
+                  offset: { type: integer }
+                  limit: { type: integer }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/folders:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: listFolders
+      x-permission: view_mailbox
+      responses:
+        '200':
+          description: Último catálogo listarCarpetas observado; nunca consulta SUNAT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Catalog' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/labels:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: listLabels
+      x-permission: view_mailbox
+      responses:
+        '200':
+          description: Último catálogo listEtiquetas observado en el visor; nunca consulta SUNAT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Catalog' }
         default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/summary:
     parameters:
@@ -93,7 +139,7 @@ paths:
       operationId: accountActivity
       x-permission: view_mailbox
       responses:
-        '200': { description: Corrida actual, páginas y últimas 20 corridas }
+        '200': { description: 'Corrida actual, páginas y últimas 20 corridas con bandejas, estado de catálogos y alertas (ok | unavailable | null), reautenticaciones y elementos nuevos desde la última corrida completa (null en la primera)' }
         default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/inventory:
     parameters:
@@ -403,7 +449,7 @@ paths:
     get:
       operationId: listNotices
       responses:
-        '200': { description: Avisos visibles del usuario activo }
+        '200': { description: 'Avisos visibles del usuario activo; counts lleva solo cantidades (p. ej. new_mail con messages y notifications), nunca asuntos ni contenido' }
         default: { $ref: '#/components/responses/Error' }
   /notices/{noticeId}/read:
     parameters:
@@ -467,14 +513,40 @@ components:
         accountIds:
           type: array
           items: { type: string, format: uuid }
+    Catalog:
+      type: object
+      required: [accountId, items, observedAt, lastAttempt]
+      properties:
+        accountId: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            type: object
+            required: [code, name]
+            properties:
+              code: { type: string, description: Código SUNAT; se conservan códigos desconocidos }
+              name: { type: string }
+              color: { type: string, nullable: true }
+              messageCount: { type: integer, nullable: true }
+        observedAt: { type: string, format: date-time, nullable: true }
+        lastAttempt: { type: string, nullable: true, enum: [ok, unavailable, null], description: Resultado en la última corrida iniciada }
     MailItem:
       type: object
-      required: [id, tipoMsj, codMensaje, indEstado, reviewed]
+      required: [id, box, tipoMsj, codMensaje, indEstado, remoteState, reviewed]
       properties:
         id: { type: string, format: uuid }
+        box: { type: string, enum: [messages, notifications] }
         tipoMsj: { type: integer, enum: [1, 2] }
         codMensaje: { type: string }
-        indEstado: { type: integer, description: Estado observado en SUNAT }
+        indEstado: { type: integer, description: Estado observado en SUNAT (valor original) }
+        remoteState: { type: string, enum: [unread, read] }
+        subject: { type: string, nullable: true, description: desAsunto original; puede contener entidades HTML }
+        sender: { type: string, nullable: true }
+        publishedAtText: { type: string, nullable: true, description: fecPublica tal como llegó, sin zona }
+        publishedAt: { type: string, format: date-time, nullable: true, description: fecPublica interpretada en America/Lima }
+        folderCode: { type: string, nullable: true }
+        labelCode: { type: string, nullable: true }
+        attachmentCount: { type: integer, nullable: true, description: cantidadArchAdj anunciado en el listado }
         reviewed: { type: boolean, description: Estado local de este usuario }
     RunResult:
       type: object

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, HttpCode, HttpException, Inject, Param,
 import { Catch, ExceptionFilter, ArgumentsHost } from "@nestjs/common";
 import { FastifyReply } from "fastify";
 import { QueryFailedError } from "typeorm";
-import { AppError } from "@buzon-sol/domain";
+import { AppError, logEvent } from "@buzon-sol/domain";
 import { AuthService } from "./auth";
 import { IdentityService } from "./identity";
 import { AccountsService } from "./accounts";
@@ -12,6 +12,7 @@ import { OperationsService } from "./operations";
 import { FilesService } from "./files";
 import { InventoryService } from "./inventory";
 import { ConnectionService } from "./connection";
+import { MailboxService } from "./mailbox";
 
 @Catch()
 export class SafeErrorFilter implements ExceptionFilter {
@@ -31,7 +32,7 @@ export class SafeErrorFilter implements ExceptionFilter {
       reply.status(400).send({ code: "validation" });
     } else {
       // Never log SQL, request bodies, headers or remote URLs from unexpected errors.
-      process.stderr.write("API unexpected error\n");
+      logEvent("error", "api_unexpected_error");
       reply.status(500).send({ code: "internal" });
     }
   }
@@ -52,6 +53,7 @@ export class IdentityController {
     @Inject(FilesService) private readonly files: FilesService,
     @Inject(InventoryService) private readonly inventory: InventoryService,
     @Inject(ConnectionService) private readonly connection: ConnectionService,
+    @Inject(MailboxService) private readonly mailbox: MailboxService,
   ) {}
 
   @Post("auth/login")
@@ -130,9 +132,8 @@ export class IdentityController {
 
   @Get("accounts/:accountId/mail")
   async mail(@Headers("authorization") bearer: string, @Param("accountId") accountId: string,
-    @Query("offset") offset?: string, @Query("limit") limit?: string) {
-    return this.identity.listMail(await this.auth.authenticate(bearer), accountId,
-      offset === undefined ? 0 : Number(offset), limit === undefined ? 100 : Number(limit));
+    @Query() query: Record<string, string | undefined>) {
+    return this.mailbox.list(await this.auth.authenticate(bearer), accountId, query);
   }
 
   @Patch("accounts/:accountId/items/:itemId/review")
@@ -180,6 +181,16 @@ export class IdentityController {
   @Get("accounts/:accountId/activity")
   async activity(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
     return this.operations.activity(await this.auth.authenticate(bearer), accountId);
+  }
+
+  @Get("accounts/:accountId/folders")
+  async folders(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
+    return this.mailbox.catalog(await this.auth.authenticate(bearer), accountId, "folders");
+  }
+
+  @Get("accounts/:accountId/labels")
+  async labels(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
+    return this.mailbox.catalog(await this.auth.authenticate(bearer), accountId, "labels");
   }
 
   @Get("accounts/:accountId/summary")

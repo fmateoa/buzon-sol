@@ -28,6 +28,14 @@ test("due schedules create one run per account, advance Lima slot and pause on q
       await assert.rejects(dispatchDueSchedules(db, async () => {}, now),
         (error) => error instanceof AppError && error.code === "remote_unavailable");
       process.env.SUNAT_CRON_VALIDATED = "true";
+      // Without S-04 validated, an admin must accept the possible remote effect of logging in.
+      assert.equal(await dispatchDueSchedules(db, async () => { throw new Error("must not enqueue"); }, now), 0);
+      const gated: { state: string; pause_reason: string }[] = await db.query(
+        "SELECT state,pause_reason FROM sync_schedules WHERE account_id=?", [accountId]);
+      assert.deepEqual([gated[0].state, gated[0].pause_reason], ["paused", "remote_effect_not_accepted"]);
+      await db.query("UPDATE sync_schedules SET state='active',pause_reason=NULL,remote_effect_accepted=true,next_run_at=? WHERE account_id=?",
+        [new Date("2026-09-30T13:00:00.000Z"), accountId]);
+      await db.query("DELETE FROM in_app_notices WHERE account_id=?", [accountId]);
       const jobs: string[] = [];
       const enqueue = async (_account: string, runId: string) => { jobs.push(runId); };
       const dispatched = await Promise.all([
@@ -35,8 +43,9 @@ test("due schedules create one run per account, advance Lima slot and pause on q
       ]);
       assert.equal(dispatched.reduce((a, b) => a + b, 0), 1);
       assert.equal(jobs.length, 1);
-      const run: { mode: string; state: string }[] = await db.query("SELECT mode,state FROM sync_runs WHERE id=?", [jobs[0]]);
+      const run: { mode: string; state: string; boxes_json: string[] | string }[] = await db.query("SELECT mode,state,boxes_json FROM sync_runs WHERE id=?", [jobs[0]]);
       assert.deepEqual([run[0].mode, run[0].state], ["scheduled", "pending"]);
+      assert.deepEqual(typeof run[0].boxes_json === "string" ? JSON.parse(run[0].boxes_json) : run[0].boxes_json, ["messages"]);
       const next: { next_run_at: Date }[] = await db.query("SELECT next_run_at FROM sync_schedules WHERE account_id=?", [accountId]);
       assert.equal(next[0].next_run_at.toISOString(), "2026-10-01T13:00:00.000Z");
       assert.equal(await dispatchDueSchedules(db, enqueue, now), 0);

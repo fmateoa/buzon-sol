@@ -223,13 +223,13 @@ test("API enforces account scope and immediate revocation", { skip: process.env.
     assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).statusCode, 200);
     const reviewUrl = `/api/v1/accounts/${a}/items/${aItemId}/review`;
     assert.equal((await request("PATCH", reviewUrl, token, { reviewed: true })).statusCode, 204);
-    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).json()[0].reviewed, true);
+    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).json().rows[0].reviewed, true);
     assert.equal((await request("PATCH", reviewUrl, token, { reviewed: false })).statusCode, 204);
-    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).json()[0].reviewed, false);
+    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).json().rows[0].reviewed, false);
     assert.equal((await request("PATCH", `/api/v1/accounts/${b}/items/${itemId}/review`, token, { reviewed: true })).statusCode, 403);
     assert.equal((await request("PATCH", `/api/v1/accounts/${a}/items/${itemId}/review`, token, { reviewed: true })).statusCode, 404);
     assert.equal((await request("GET", `/api/v1/accounts/${a}/mail?limit=0`, token)).statusCode, 400);
-    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail?offset=1`, token)).json().length, 0);
+    assert.equal((await request("GET", `/api/v1/accounts/${a}/mail?offset=1`, token)).json().rows.length, 0);
     const reviewedAudit: { action: string }[] = await db.query("SELECT action FROM audit_events WHERE actor_user_id=? AND object_id=?", [userId, aItemId]);
     assert.equal(reviewedAudit.filter((event) => event.action === "set_reviewed").length, 2);
     const completeRun = randomUUID(), partialRun = randomUUID(), laterItem = randomUUID();
@@ -253,6 +253,51 @@ test("API enforces account scope and immediate revocation", { skip: process.env.
     assert.equal((await request("GET", `/api/v1/accounts/${a}/activity`, token)).json().current.id, pendingRun);
     assert.equal((await request("GET", `/api/v1/accounts/${a}/summary`, token)).statusCode, 200);
     assert.equal((await request("GET", `/api/v1/accounts/${b}/summary`, token)).statusCode, 403);
+    const [n1, n2, n3] = [randomUUID(), randomUUID(), randomUUID()];
+    for (const [id, code, state, subject, sender, text, at, label] of [
+      [n1, "fictional-n1", 0, "Resolución 50% ficticia", "EMISOR_X", "29/09/2026 18:23:54", "2026-09-29 23:23:54", "01"],
+      [n2, "fictional-n2", 1, "Aviso ficticio", "EMISOR_Y", "30/09/2026 00:30:00", "2026-09-30 05:30:00", "02"],
+      [n3, "fictional-n3", 2, null, null, null, null, null],
+    ] as const) await db.query(
+      `INSERT INTO mail_items (id,account_id,tipo_msj,cod_mensaje,ind_estado,subject_text,sender_text,
+        published_at_text,published_at,label_code,row_json) VALUES (?,?,2,?,?,?,?,?,?,?,?)`,
+      [id, a, code, state, subject, sender, text, at, label, "{}"]);
+    const mail = async (query: string) => {
+      const response = await request("GET", `/api/v1/accounts/${a}/mail?box=notifications&${query}`, token);
+      assert.equal(response.statusCode, 200, query);
+      const page: { rows: { id: string; box: string; remoteState: string; publishedAt: string | null }[]; total: number } = response.json();
+      return { ids: page.rows.map((row) => row.id), total: page.total, rows: page.rows };
+    };
+    const byDate = await mail("");
+    assert.deepEqual([byDate.ids, byDate.total], [[n2, n1, n3], 3]);
+    assert.deepEqual(byDate.rows.map((row) => [row.box, row.remoteState]),
+      [["notifications", "read"], ["notifications", "unread"], ["notifications", "read"]]);
+    assert.equal(byDate.rows[1].publishedAt, "2026-09-29T23:23:54.000Z");
+    assert.deepEqual((await mail("direction=asc")).ids, [n1, n2, n3]);
+    assert.deepEqual((await mail("state=unread")).ids, [n1]);
+    assert.deepEqual((await mail("state=read")).total, 2);
+    assert.deepEqual((await mail("q=50%25")).ids, [n1]);
+    assert.deepEqual((await mail("q=_")).total, 2);
+    assert.deepEqual((await mail("dateFrom=2026-09-30&dateTo=2026-09-30")).ids, [n2]);
+    assert.deepEqual((await mail("dateTo=2026-09-29")).ids, [n1]);
+    assert.deepEqual((await mail("label=01")).ids, [n1]);
+    assert.deepEqual((await mail("review=pending&limit=1&offset=1")).ids, [n1]);
+    assert.equal((await mail("review=reviewed")).total, 0);
+    await db.query("INSERT INTO sunat_labels (account_id,code,name,color,message_count) VALUES (?,?,?,?,?)",
+      [a, "99", "ETIQUETA FICTICIA", "#00afff", 1]);
+    const labelCatalog = await request("GET", `/api/v1/accounts/${a}/labels`, token);
+    assert.equal(labelCatalog.statusCode, 200);
+    assert.deepEqual(labelCatalog.json().items, [{ code: "99", name: "ETIQUETA FICTICIA", color: "#00afff", messageCount: 1 }]);
+    assert.deepEqual((await request("GET", `/api/v1/accounts/${a}/folders`, token)).json().items, []);
+    assert.equal((await request("GET", `/api/v1/accounts/${b}/labels`, token)).statusCode, 403);
+    await db.query("INSERT INTO in_app_notices (id,account_id,user_id,kind,payload_json) VALUES (?,?,?,?,?)",
+      [randomUUID(), a, userId, "new_mail", JSON.stringify({ messages: 2, notifications: 0 })]);
+    const newMail = (await request("GET", "/api/v1/notices", token)).json()
+      .filter((notice: { kind: string }) => notice.kind === "new_mail");
+    assert.deepEqual(newMail.map((notice: { counts: unknown }) => notice.counts), [{ messages: 2, notifications: 0 }]);
+    for (const bad of ["box=x", "dateFrom=2026-02-31", "sort=codMensaje", "direction=up", "limit=201"]) {
+      assert.equal((await request("GET", `/api/v1/accounts/${a}/mail?${bad}`, token)).statusCode, 400, bad);
+    }
     assert.equal((await request("GET", "/api/v1/audit", token)).statusCode, 403);
     assert.equal((await http.inject({ method: "POST", url: readUrl,
       headers: { authorization: `Bearer ${token}`, "idempotency-key": "fictional-key-456" } })).statusCode, 403);

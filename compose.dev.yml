@@ -1,0 +1,77 @@
+# Local development stack: API, worker, MySQL, Redis and MinIO with a private bucket.
+# Create .env.dev first with `node scripts/dev-env.mjs` (random local secrets, never committed).
+# SUNAT jobs stay disabled: the transport is NO_VALIDADO and no SUNAT_* gate is set here.
+x-app: &app
+  build: .
+  image: buzon-sol-dev:local
+  env_file: .env.dev
+  environment: &app-env
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    DB_NAME: buzon_sol
+    DB_USER: buzon
+    REDIS_URL: redis://redis:6379
+    S3_ENDPOINT: http://minio:9000
+    S3_BUCKET: buzon
+    S3_REGION: us-east-1
+
+services:
+  mysql:
+    image: mysql:8.4
+    env_file: .env.dev
+    environment:
+      MYSQL_DATABASE: buzon_sol
+      MYSQL_USER: buzon
+    ports: ["127.0.0.1:33362:3306"]
+    volumes: [buzon_mysql_dev:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u buzon -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:36380:6379"]
+    volumes: [buzon_redis_dev:/data]
+
+  minio:
+    # Community MinIO build (unmaintained upstream). Fine for local development; production needs a supported S3.
+    image: bitnamilegacy/minio:2025.5.24
+    env_file: .env.dev
+    environment:
+      MINIO_DEFAULT_BUCKETS: buzon
+    ports: ["127.0.0.1:39000:9000", "127.0.0.1:39001:9001"]
+    volumes: [buzon_minio_dev:/bitnami/minio/data]
+
+  migrate:
+    <<: *app
+    command: ["pnpm", "--filter", "@buzon-sol/api", "migration:run"]
+    depends_on:
+      mysql: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["pnpm", "--filter", "@buzon-sol/api", "start"]
+    environment:
+      <<: *app-env
+      API_PORT: "3000"
+    ports: ["127.0.0.1:38080:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+      minio: { condition: service_started }
+
+  worker:
+    <<: *app
+    command: ["pnpm", "--filter", "@buzon-sol/worker", "start"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+      minio: { condition: service_started }
+
+volumes:
+  buzon_mysql_dev:
+  buzon_redis_dev:
+  buzon_minio_dev:

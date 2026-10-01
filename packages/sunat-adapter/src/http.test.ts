@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AppError } from "@buzon-sol/domain";
 import { SunatHttpSession } from "./http.js";
+import { parseAlerts, parseFolders } from "./catalogs.js";
 
 const credential = { ruc: "11111111111", solUser: "TESTUSER", password: "TESTPASS" };
 const login = "https://api-seguridad.sunat.gob.pe/v1/clientessol/client/oauth2/loginMenuSol?originalUrl=menu&amp;state=test-state";
@@ -59,9 +60,9 @@ test("HTTP session follows SOL login, keeps cookies per origin, and never reques
   const session = await SunatHttpSession.open(credential, fakeFetch);
   try {
     assert.equal(await session.testConnection(), "valid");
-    assert.equal((await session.listFolders())[0]?.codCarpeta, "03");
-    assert.deepEqual(session.listLabels(), [{ codEtiqueta: "14", descEtiqueta: "Fixture", colorEtiqueta: "#fff", cantEtiqueta: 0 }]);
-    assert.deepEqual(await session.consultAlerts(), []);
+    assert.equal(parseFolders(await session.listFolders())[0]?.code, "03");
+    assert.equal((await session.visorHtml()).contentType, "text/html");
+    assert.deepEqual(parseAlerts(await session.consultAlerts()).alerts, []);
   }
   finally { await session.close(); }
   assert.equal(calls.filter((call) => call.path.endsWith("listNotiMenPag")).length, 2);
