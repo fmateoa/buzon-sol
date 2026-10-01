@@ -14,9 +14,44 @@ paths:
   /health:
     get:
       operationId: health
+      description: Liveness. El proceso responde; no consulta ninguna dependencia.
       security: []
       responses:
         '200': { description: Servicio iniciado }
+  /health/ready:
+    get:
+      operationId: healthReady
+      description: >
+        Readiness. Comprueba MySQL y, solo si alguna puerta SUNAT que encola trabajo está activa, Redis (cada una con
+        tope de 2 s). Con todas las puertas apagadas Redis figura como `skipped`. No revela el motivo de un fallo.
+      security: []
+      responses:
+        '200':
+          description: Puede servir su función esencial
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, enum: [ok] }
+                      redis: { type: string, enum: [ok, skipped] }
+        '503':
+          description: Una dependencia imprescindible no responde
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [unavailable] }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, enum: [ok, down] }
+                      redis: { type: string, enum: [ok, down, skipped] }
   /auth/login:
     post:
       operationId: login

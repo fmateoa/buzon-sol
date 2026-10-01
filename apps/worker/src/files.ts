@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { DataSource } from "typeorm";
 import { AppError } from "@buzon-sol/domain";
 import sanitizeHtml from "sanitize-html";
+import { tryAccountLock } from "./account-lock.js";
 
 export interface FileResponse { status: number; contentType: string; bytes: Buffer; verifiedGeneratedDocument?: boolean }
 export interface FileClient {
@@ -71,14 +72,9 @@ export class FileProcessor {
   constructor(private readonly db: DataSource, private readonly client: FileClient, private readonly store: ObjectStore) {}
 
   async process(accountId: string, fileId: string, authorize?: () => Promise<void>): Promise<void> {
-    const lease = this.db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${accountId}`;
-    let locked = false;
+    const lock = await tryAccountLock(this.db, accountId);
+    if (!lock) throw new AppError("conflict_running");
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) throw new AppError("conflict_running");
-      locked = true;
       const assets: { id: string; item_id: string; kind: "attachment" | "generated_document";
         cod_archivo: string | null; num_id: string | null; state: string }[] =
         await this.db.query("SELECT id,item_id,kind,cod_archivo,num_id,state FROM file_assets WHERE id=? AND account_id=?", [fileId, accountId]);
@@ -89,8 +85,7 @@ export class FileProcessor {
       const response = async () => this.client.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
       await storeFile(this.db, this.store, accountId, asset, response);
     } finally {
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
 }

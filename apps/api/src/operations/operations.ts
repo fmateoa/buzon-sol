@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { DB } from "../common/tokens";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 @Injectable()
 export class OperationsService {

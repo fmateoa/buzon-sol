@@ -5,6 +5,7 @@ import { S3Storage } from "@buzon-sol/storage";
 import { storeDetail, type DetailFile } from "./detail-store.js";
 import { storeFile, type FileResponse, type ObjectStore, type StorableAsset } from "./files.js";
 import { noticeAdmins } from "./notices.js";
+import { tryAccountLock } from "./account-lock.js";
 
 export interface ArchiveDetail {
   body: string;
@@ -90,22 +91,16 @@ export async function recoverOrphanArchiveRuns(db: DataSource, jobExists: (runId
   let recovered = 0;
   for (const run of candidates) {
     if (run.state === "pending" && await jobExists(run.id)) continue;
-    const lease = db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${run.account_id}`;
-    let locked = false;
+    const lock = await tryAccountLock(db, run.account_id);
+    if (!lock) continue;
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) continue;
-      locked = true;
       if (run.state === "pending" && await jobExists(run.id)) continue;
       const result: { affectedRows?: number } = await db.query(
         `UPDATE archive_runs SET state='partial',error_code='remote_unavailable',finished_at=UTC_TIMESTAMP(6)
          WHERE id=? AND account_id=? AND state=?`, [run.id, run.account_id, run.state]);
       if (result.affectedRows) recovered++;
     } finally {
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
   return recovered;
@@ -123,20 +118,15 @@ export class ArchiveProcessor {
     private store?: ObjectStore) {}
 
   async process(accountId: string, runId: string): Promise<ArchiveOutcome | null> {
-    const lease = this.db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${accountId}`;
     const startedAt = Date.now();
     const counters: Counters = { itemsDone: 0, itemsFailed: 0, filesStored: 0, filesFailed: 0 };
-    let locked = false;
+    const lock = await tryAccountLock(this.db, accountId);
+    if (!lock) {
+      await this.finish(accountId, runId, counters, startedAt, "conflict_running", false);
+      throw new AppError("conflict_running");
+    }
     let client: ArchiveClient | undefined;
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) {
-        await this.finish(accountId, runId, counters, startedAt, "conflict_running", false);
-        throw new AppError("conflict_running");
-      }
-      locked = true;
       const runs: { state: string; active: number; archive_content: number; archive_files: number; archive_batch_size: number }[] =
         await this.db.query(`SELECT r.state,a.active,a.archive_content,a.archive_files,a.archive_batch_size
           FROM archive_runs r JOIN sunat_accounts a ON a.id=r.account_id WHERE r.id=? AND r.account_id=?`, [runId, accountId]);
@@ -176,8 +166,7 @@ export class ArchiveProcessor {
     } finally {
       try { await client?.close?.(); }
       catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
 

@@ -2,9 +2,11 @@ import { createHmac, randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError, encryptForWorker } from "@buzon-sol/domain";
-import { RUN_STATUS_COLUMNS, RUN_STATUS_JOINS } from "./run-status";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { RUN_STATUS_COLUMNS, RUN_STATUS_JOINS } from "../common/run-status";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 type AccountInput = { alias?: unknown; ruc?: unknown; solUser?: unknown };
 type UpdateInput = { alias?: unknown; solUser?: unknown };
@@ -32,6 +34,20 @@ function rucFingerprint(ruc: string): Buffer {
 @Injectable()
 export class AccountsService {
   constructor(@Inject(DB) private readonly db: DataSource, @Inject(AuthService) private readonly auth: AuthService) {}
+
+  async visibleAccounts(actor: Principal) {
+    this.auth.requirePermission(actor, "view_mailbox");
+    return this.db.query(
+      `SELECT a.id,a.alias,a.active,a.ruc_masked AS rucMasked,
+         COALESCE(s.state,'disabled') AS scheduleState,s.pause_reason AS pauseReason,s.next_run_at AS nextRunAt,
+         ${RUN_STATUS_COLUMNS}
+       FROM sunat_accounts a LEFT JOIN sync_schedules s ON s.account_id=a.id ${RUN_STATUS_JOINS}
+       WHERE (?=true OR EXISTS
+         (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=a.id))
+       ORDER BY a.alias`,
+      [actor.allAccounts, actor.roleId],
+    );
+  }
 
   async list(actor: Principal) {
     this.auth.requirePermission(actor, "manage_accounts");
@@ -78,10 +94,7 @@ export class AccountsService {
          VALUES (?,?,?,?,?,?,?)`,
         [id, alias, rucEncrypted, userEncrypted, fingerprint, `*******${ruc.slice(-4)}`, `${solUser.slice(0, 2)}***`],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, id, "create", "account", id],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId: id, action: "create", objectType: "account", objectId: id });
     });
     return { id };
   }
@@ -101,10 +114,7 @@ export class AccountsService {
           [alias, encryptForWorker(solUser, pem, keyId), `${solUser.slice(0, 2)}***`, accountId],
         );
       if (!result.affectedRows) throw new AppError("not_found");
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "update", "account", accountId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "update", objectType: "account", objectId: accountId });
     });
   }
 
@@ -125,10 +135,7 @@ export class AccountsService {
         "INSERT INTO sunat_credentials (id,account_id,version,ciphertext,nonce,key_id,status) VALUES (?,?,?,?,?,?,?)",
         [randomUUID(), accountId, Number(rows[0].next_version), encrypted, Buffer.from(envelope.nonce, "base64"), keyId, "untested"],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "credential", "credential", accountId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "credential", objectType: "credential", objectId: accountId });
     });
   }
 
@@ -143,10 +150,7 @@ export class AccountsService {
       );
       if (!result.affectedRows) throw new AppError("not_found");
       if (!active) await manager.query("UPDATE sync_schedules SET state='disabled',next_run_at=NULL WHERE account_id=?", [accountId]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, active ? "enable" : "disable", "account", accountId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: active ? "enable" : "disable", objectType: "account", objectId: accountId });
     });
   }
 }

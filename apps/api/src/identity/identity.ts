@@ -3,18 +3,14 @@ import { Inject, Injectable } from "@nestjs/common";
 import argon2 from "argon2";
 import { DataSource, EntityManager } from "typeorm";
 import { AppError, PERMISSIONS, type Permission } from "@buzon-sol/domain";
-import { RUN_STATUS_COLUMNS, RUN_STATUS_JOINS } from "./run-status";
-import { AuthService, DB, normalizeEmail, type Principal } from "./auth";
-import { SettingsService } from "./settings";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { validId } from "../common/ids";
+import { AuthService, normalizeEmail, type Principal } from "../auth/auth";
+import { SettingsService } from "../settings/settings";
 
 type RoleInput = { name?: unknown; permissions?: unknown; allAccounts?: unknown; accountIds?: unknown };
 type UserInput = { name?: unknown; email?: unknown; password?: unknown; roleId?: unknown };
-const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function validId(value: unknown): string {
-  if (typeof value !== "string" || !idPattern.test(value)) throw new AppError("validation");
-  return value;
-}
 
 function validName(value: unknown): string {
   if (typeof value !== "string" || !value.trim() || value.trim().length > 160) throw new AppError("validation");
@@ -30,31 +26,10 @@ function validRoleInput(input: RoleInput): { name: string; permissions: Permissi
   return { name, permissions: [...new Set(input.permissions)], allAccounts: input.allAccounts, accountIds: [...new Set(accountIds)] };
 }
 
-async function audit(manager: EntityManager, actor: Principal, action: string, objectType: string, objectId: string): Promise<void> {
-  await manager.query(
-    "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id) VALUES (?,?,?,?,?)",
-    [randomUUID(), actor.id, action, objectType, objectId],
-  );
-}
-
 @Injectable()
 export class IdentityService {
   constructor(@Inject(DB) private readonly db: DataSource, @Inject(AuthService) private readonly auth: AuthService,
     @Inject(SettingsService) private readonly settings: SettingsService) {}
-
-  async visibleAccounts(actor: Principal) {
-    this.auth.requirePermission(actor, "view_mailbox");
-    return this.db.query(
-      `SELECT a.id,a.alias,a.active,a.ruc_masked AS rucMasked,
-         COALESCE(s.state,'disabled') AS scheduleState,s.pause_reason AS pauseReason,s.next_run_at AS nextRunAt,
-         ${RUN_STATUS_COLUMNS}
-       FROM sunat_accounts a LEFT JOIN sync_schedules s ON s.account_id=a.id ${RUN_STATUS_JOINS}
-       WHERE (?=true OR EXISTS
-         (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=a.id))
-       ORDER BY a.alias`,
-      [actor.allAccounts, actor.roleId],
-    );
-  }
 
   /** Alias only: lets whoever assigns accounts to roles pick them without seeing account data. */
   async accountOptions(actor: Principal): Promise<{ id: string; alias: string }[]> {
@@ -66,29 +41,7 @@ export class IdentityService {
     if (typeof enabled !== "boolean") throw new AppError("validation");
     await this.db.transaction(async (manager) => {
       await manager.query("UPDATE app_users SET read_warning_enabled=? WHERE id=?", [enabled, actor.id]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, "preference", "preference", actor.id, JSON.stringify({ readWarningEnabled: enabled })]);
-    });
-  }
-
-  async setReviewed(actor: Principal, accountId: string, itemId: string, reviewed: unknown): Promise<void> {
-    this.auth.requireAccount(actor, "mark_reviewed", validId(accountId));
-    validId(itemId);
-    if (typeof reviewed !== "boolean") throw new AppError("validation");
-    await this.db.transaction(async (manager) => {
-      const rows: { id: string }[] = await manager.query(
-        "SELECT id FROM mail_items WHERE id=? AND account_id=?", [itemId, accountId]);
-      if (!rows.length) throw new AppError("not_found");
-      await manager.query(
-        `INSERT INTO mail_reviews (user_id,item_id,account_id,reviewed,reviewed_at)
-         VALUES (?,?,?,?,UTC_TIMESTAMP(6))
-         ON DUPLICATE KEY UPDATE reviewed=VALUES(reviewed),reviewed_at=VALUES(reviewed_at)`,
-        [actor.id, itemId, accountId, reviewed]);
-      await manager.query(
-        `INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id,change_json)
-         VALUES (?,?,?,?,?,?,?)`,
-        [randomUUID(), actor.id, accountId, "set_reviewed", "mail_item", itemId, JSON.stringify({ reviewed })]);
+      await recordAudit(manager, { actorId: actor.id, action: "preference", objectType: "preference", objectId: actor.id, change: { readWarningEnabled: enabled } });
     });
   }
 
@@ -100,7 +53,7 @@ export class IdentityService {
       await this.requireAccountsExist(manager, role.accountIds);
       await manager.query("INSERT INTO roles (id,name,all_accounts) VALUES (?,?,?)", [id, role.name, role.allAccounts]);
       await this.setRoleRelations(manager, id, role);
-      await audit(manager, actor, "create", "role", id);
+      await recordAudit(manager, { actorId: actor.id, action: "create", objectType: "role", objectId: id });
     });
     return { id };
   }
@@ -117,7 +70,7 @@ export class IdentityService {
       await manager.query("DELETE FROM role_permissions WHERE role_id=?", [roleId]);
       await manager.query("DELETE FROM role_sunat_accounts WHERE role_id=?", [roleId]);
       await this.setRoleRelations(manager, roleId, role);
-      await audit(manager, actor, "update", "role", roleId);
+      await recordAudit(manager, { actorId: actor.id, action: "update", objectType: "role", objectId: roleId });
     });
   }
 
@@ -157,7 +110,7 @@ export class IdentityService {
         "INSERT INTO app_users (id,email,name,password_hash,status,role_id) VALUES (?,?,?,?,?,?)",
         [id, email, name, hash, "active", roleId],
       );
-      await audit(manager, actor, "create", "user", id);
+      await recordAudit(manager, { actorId: actor.id, action: "create", objectType: "user", objectId: id });
     });
     return { id };
   }
@@ -171,7 +124,7 @@ export class IdentityService {
       const result = await manager.query("UPDATE app_users SET status=? WHERE id=?", [status, userId]);
       if (!result.affectedRows) throw new AppError("not_found");
       if (status === "disabled") await manager.query("UPDATE app_sessions SET revoked_at=UTC_TIMESTAMP(6) WHERE user_id=? AND revoked_at IS NULL", [userId]);
-      await audit(manager, actor, status === "disabled" ? "disable" : "enable", "user", userId);
+      await recordAudit(manager, { actorId: actor.id, action: status === "disabled" ? "disable" : "enable", objectType: "user", objectId: userId });
     });
   }
 
@@ -185,7 +138,7 @@ export class IdentityService {
       await this.requireRoleExists(manager, roleId);
       const result = await manager.query("UPDATE app_users SET name=?,email=?,role_id=? WHERE id=?", [name, email, roleId, userId]);
       if (!result.affectedRows) throw new AppError("not_found");
-      await audit(manager, actor, "update", "user", userId);
+      await recordAudit(manager, { actorId: actor.id, action: "update", objectType: "user", objectId: userId });
     });
   }
 

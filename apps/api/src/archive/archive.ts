@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { Queue } from "bullmq";
+import { addJob } from "../common/job-queue";
 import { DataSource } from "typeorm";
-import { AppError, ARCHIVE_QUEUE, redisApiOptions, type ArchiveJob } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { AppError, ARCHIVE_QUEUE, type ArchiveJob } from "@buzon-sol/domain";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
-type Input = Record<string, unknown>;
+type Input = { archiveContent?: unknown; archiveFiles?: unknown; archiveBatchSize?: unknown; retryFailed?: unknown };
 type SettingsRow = { archive_content: number; archive_files: number; archive_batch_size: number };
 
 const settingsDto = (accountId: string, row: SettingsRow) => ({ accountId, archiveContent: Boolean(row.archive_content),
@@ -41,10 +43,7 @@ export class ArchiveService {
         "UPDATE sunat_accounts SET archive_content=?,archive_files=?,archive_batch_size=? WHERE id=?",
         [archiveContent, archiveFiles, archiveBatchSize, accountId]);
       if (!result.affectedRows) throw new AppError("not_found");
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "update", "mailbox_settings", accountId,
-          JSON.stringify({ archiveContent, archiveFiles, archiveBatchSize })]);
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "update", objectType: "mailbox_settings", objectId: accountId, change: { archiveContent, archiveFiles, archiveBatchSize } });
     });
   }
 
@@ -79,23 +78,18 @@ export class ArchiveService {
       await manager.query(
         "INSERT INTO archive_runs (id,account_id,trigger_kind,actor_user_id,state) VALUES (?,?,'manual',?,'pending')",
         [id, accountId, actor.id]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "start", "archive_run", id, JSON.stringify({ retryFailed })]);
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "start", objectType: "archive_run", objectId: id, change: { retryFailed } });
       return { id, state: "pending", created: true };
     });
     if (run.created) {
-      const queue = new Queue<ArchiveJob>(ARCHIVE_QUEUE, { connection: redisApiOptions() });
       try {
-        await queue.add("archive", { accountId, runId: run.id },
+        await addJob<ArchiveJob>(ARCHIVE_QUEUE, "archive", { accountId, runId: run.id },
           { jobId: run.id, attempts: 1, removeOnComplete: true, removeOnFail: true });
       } catch {
         await this.db.query(
           "UPDATE archive_runs SET state='partial',error_code='remote_unavailable',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND state='pending'",
           [run.id]);
         throw new AppError("remote_unavailable");
-      } finally {
-        await queue.close();
       }
     }
     return { id: run.id, state: run.state };

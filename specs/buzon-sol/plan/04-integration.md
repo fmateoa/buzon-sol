@@ -19,7 +19,7 @@ pnpm dev                                                       # web contra la A
 
 | Tema | Decisión | Pendiente |
 |---|---|---|
-| Sesión | Cookie `bz_session` (HttpOnly, SameSite=Strict) fijada por la API al ingresar con `X-Session-Mode: cookie`; los POST/PATCH devuelven la cookie `bz_csrf` en `X-CSRF-Token`. Recargar la página conserva la sesión; `GET /auth/me` decide. Un `401` lleva al login. `Bearer` sigue valiendo para clientes no web. | Hecho: `apps/api/src/session-cookie.ts`. |
+| Sesión | Cookie `bz_session` (HttpOnly, SameSite=Strict) fijada por la API al ingresar con `X-Session-Mode: cookie`; los POST/PATCH devuelven la cookie `bz_csrf` en `X-CSRF-Token`. Recargar la página conserva la sesión; `GET /auth/me` decide. Un `401` lleva al login. `Bearer` sigue valiendo para clientes no web. | Hecho: `apps/api/src/auth/session-cookie.ts`. |
 | Alta de usuarios | La API no tiene invitaciones ni proveedor de correo (P-02). El administrador fija una **contraseña inicial** (≥ 12) en el formulario y la entrega por un canal seguro. `BuzonAdapter.userOnboarding` indica el modo; el prototipo conserva «invitación». | Flujo de invitación o cambio obligatorio de contraseña; no hay endpoint para cambiar o restablecer contraseñas. |
 | Listados de gestión | La API entrega usuarios, roles y cuentas completos; filtro, orden y página se resuelven en `HttpAdapter` (son listas cortas). | Paginación en servidor si crecen. |
 | Errores | La API responde `{ code }` sin detalle por campo. Los códigos conocidos se convierten en `AppError`; el resto se muestra como error inesperado. | Errores por campo (p. ej. correo o RUC duplicado hoy solo dan `validation`). |

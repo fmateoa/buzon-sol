@@ -64,3 +64,15 @@ test("files cannot start before reading and inventory validation", async () => {
     }
   }
 });
+
+test("without ENABLE_SUNAT_JOBS the worker stays idle, opens nothing and stops on SIGTERM", async () => {
+  const previous = process.env.ENABLE_SUNAT_JOBS;
+  delete process.env.ENABLE_SUNAT_JOBS;
+  try {
+    const running = main();
+    setImmediate(() => process.emit("SIGTERM"));
+    await running;
+  } finally {
+    if (previous !== undefined) process.env.ENABLE_SUNAT_JOBS = previous;
+  }
+});

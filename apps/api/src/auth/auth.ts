@@ -4,10 +4,10 @@ import argon2 from "argon2";
 import { DataSource } from "typeorm";
 import { AppError, requireAccountAccess, type Permission } from "@buzon-sol/domain";
 
-import { DB } from "./tokens";
-import { SettingsService } from "./settings";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { SettingsService } from "../settings/settings";
 
-export { DB };
 /** Evita una escritura por aviso de actividad: la última actividad solo se refresca pasado este intervalo. */
 const TOUCH_MS = 60_000;
 
@@ -57,9 +57,7 @@ export class AuthService {
       [max, lockoutMinutes, user.id]);
     const rows: { failed_logins: number }[] = await this.db.query("SELECT failed_logins FROM app_users WHERE id=?", [user.id]);
     if (rows[0]?.failed_logins === max) {
-      await this.db.query(
-        "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), user.id, "failure", "user", user.id, JSON.stringify({ lockedMinutes: lockoutMinutes })]);
+      await recordAudit(this.db, { actorId: user.id, action: "failure", objectType: "user", objectId: user.id, change: { lockedMinutes: lockoutMinutes } });
     }
   }
 
@@ -88,10 +86,7 @@ export class AuthService {
         "INSERT INTO app_sessions (id,user_id,token_hash,expires_at,last_seen_at) VALUES (?,?,?,?,UTC_TIMESTAMP(6))",
         [sessionId, user.id, tokenHash(token), expiresAt],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id) VALUES (?,?,?,?,?)",
-        [randomUUID(), user.id, "login", "user", user.id],
-      );
+      await recordAudit(manager, { actorId: user.id, action: "login", objectType: "user", objectId: user.id });
     });
     return { token, expiresAt: expiresAt.toISOString() };
   }
@@ -144,10 +139,7 @@ export class AuthService {
   async logout(user: Principal): Promise<void> {
     await this.db.transaction(async (manager) => {
       await manager.query("UPDATE app_sessions SET revoked_at=UTC_TIMESTAMP(6) WHERE id=?", [user.sessionId]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id) VALUES (?,?,?,?,?)",
-        [randomUUID(), user.id, "logout", "user", user.id],
-      );
+      await recordAudit(manager, { actorId: user.id, action: "logout", objectType: "user", objectId: user.id });
     });
   }
 }

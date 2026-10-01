@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { Queue } from "bullmq";
+import { addJob } from "../common/job-queue";
 import { DataSource } from "typeorm";
-import { AppError, INVENTORY_QUEUE, redisApiOptions, type InventoryJob } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { AppError, INVENTORY_QUEUE, type InventoryJob } from "@buzon-sol/domain";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 @Injectable()
 export class InventoryService {
@@ -34,10 +36,7 @@ export class InventoryService {
         "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page,boxes_json) VALUES (?,?,?,?,?,?,?)",
         [id, accountId, "manual", "pending", 1, 1, JSON.stringify(["messages", "notifications"])],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "start", "sync_run", id],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "start", objectType: "sync_run", objectId: id });
       return { id, state: "pending" };
     });
     if (run.state === "pending") await this.enqueue(accountId, run.id);
@@ -92,25 +91,19 @@ export class InventoryService {
       if (!credentials.length) throw new AppError("needs_credential");
       if (credentials[0].status !== "valid") throw new AppError("invalid_credential");
       await manager.query("UPDATE sync_runs SET state='pending',error_code=NULL WHERE id=?", [runId]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "resume", "sync_run", runId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "resume", objectType: "sync_run", objectId: runId });
     });
     await this.enqueue(accountId, runId);
     return { id: runId, state: "pending" };
   }
 
   private async enqueue(accountId: string, runId: string): Promise<void> {
-    const queue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisApiOptions() });
     try {
-      await queue.add("inventory", { accountId, runId }, { jobId: runId, attempts: 1,
-        removeOnComplete: true, removeOnFail: true });
+      await addJob<InventoryJob>(INVENTORY_QUEUE, "inventory", { accountId, runId },
+        { jobId: runId, attempts: 1, removeOnComplete: true, removeOnFail: true });
     } catch {
       await this.db.query("UPDATE sync_runs SET state='partial',error_code='remote_unavailable' WHERE id=? AND state='pending'", [runId]);
       throw new AppError("remote_unavailable");
-    } finally {
-      await queue.close();
     }
   }
 }

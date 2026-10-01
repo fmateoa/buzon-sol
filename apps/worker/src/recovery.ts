@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
+import { tryAccountLock } from "./account-lock.js";
 
 /** Reports whether the queue still holds a job for a run; a lost job leaves a pending run without a worker. */
 export type JobExists = (runId: string) => Promise<boolean>;
@@ -15,14 +16,9 @@ export async function recoverOrphanRuns(db: DataSource, jobExists: JobExists): P
   for (const run of candidates) {
     // A queued job will be picked up and resumed by the runner itself.
     if (run.state === "pending" && await jobExists(run.id)) continue;
-    const lease = db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${run.account_id}`;
-    let locked = false;
+    const lock = await tryAccountLock(db, run.account_id);
+    if (!lock) continue;
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) continue;
-      locked = true;
       // A job enqueued between the check and the lock would find the run partial and still resume it.
       if (run.state === "pending" && await jobExists(run.id)) continue;
       await db.transaction(async (manager) => {
@@ -36,8 +32,7 @@ export async function recoverOrphanRuns(db: DataSource, jobExists: JobExists): P
         recovered++;
       });
     } finally {
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
   return recovered;
