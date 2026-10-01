@@ -6,7 +6,7 @@ React 19, TypeScript estricto, Tailwind CSS v4 y `lizaui` instalada desde npm. L
 
 La instalación publicada es `npm i lizaui`; preferir el comando equivalente `pnpm add lizaui` si el proyecto se inicia con pnpm o ya usa su lockfile. Respetar el gestor existente si es otro y no mezclar lockfiles.
 
-Implementar todos los hitos frontend FE-0 a FE-5 del [plan](../plan/frontend.md): shell adaptable, selector de cuenta, resumen, bandejas, filtros/paginación, metadatos y lectura confirmada simulada, actividad y pantallas de administración con datos ficticios tipados. Las acciones reales de credencial, programación, lectura, descarga y auditoría se conectan por contratos internos cuando exista backend. No crear endpoints ni respuestas inventadas ni conectar el navegador directamente a SUNAT.
+Implementar todos los hitos frontend FE-0 a FE-5 del [plan](../plan/03-frontend.md): shell adaptable, selector de cuenta, resumen, bandejas, filtros/paginación, metadatos y lectura confirmada simulada, actividad y pantallas de administración con datos ficticios tipados. Las acciones reales de credencial, programación, lectura, descarga y auditoría se conectan por contratos internos cuando exista backend. No crear endpoints ni respuestas inventadas ni conectar el navegador directamente a SUNAT.
 
 ## 2. Responsabilidades y datos
 

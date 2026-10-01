@@ -3,11 +3,13 @@ import * as Yup from "yup";
 import { Button } from "lizaui/button";
 import type { AppUser, RoleId, RolePermissions } from "@/domain/types";
 import type { UserInput } from "@/domain/adapter";
+import { useAdapter } from "@/app/adapter-context";
 import { FocusFirstError, GroupError, TextField } from "@/components/custom/form-field";
 import { FilterSelect } from "@/components/custom/list-table";
 import { Notice } from "@/components/custom/notice";
 import { Segmented } from "@/components/custom/segmented";
 import { SheetBody, SheetFooter, SheetForm } from "@/components/custom/side-sheet";
+import { useAppSession } from "@/features/session/use-session";
 import { errorCopy, isAppError } from "@/lib/errors";
 import { PERMISSION_LABELS } from "@/lib/permissions";
 import { useAccountOptions, useCreateUser, useSetUserStatus, useUpdateUser } from "./queries";
@@ -19,6 +21,7 @@ const schema = Yup.object({
 	email: Yup.string().trim().email("Ingrese un correo válido.").required("Ingrese el correo de trabajo."),
 	roleId: Yup.string().required("Elija un rol."),
 });
+const passwordSchema = (min: number) => schema.shape({ password: Yup.string().required("Ingrese la contraseña inicial.").min(min, `Use al menos ${min} caracteres.`) });
 
 /** Vista previa de cuentas derivadas: la asignación de cuentas ocurre en el rol. */
 const RolePreview = ({ roles }: { roles: RolePermissions[] }) => {
@@ -104,6 +107,8 @@ interface UserFormProps {
 
 /** A5 · Alta de usuario o acceso de un usuario existente (estado y rol). */
 export const UserForm = ({ user, roles, isSelf = false, onDone, onCancel }: UserFormProps) => {
+	const withPassword = useAdapter().userOnboarding === "initial_password";
+	const passwordMinLength = useAppSession().passwordMinLength;
 	const create = useCreateUser();
 	const update = useUpdateUser();
 	const setStatus = useSetUserStatus();
@@ -127,10 +132,10 @@ export const UserForm = ({ user, roles, isSelf = false, onDone, onCancel }: User
 		}
 	};
 
-	const initial: Values = { name: user?.name ?? "", email: user?.email ?? "", roleId: user?.roleId ?? ("" as RoleId), status: user?.status ?? "invited" };
+	const initial: Values = { name: user?.name ?? "", email: user?.email ?? "", roleId: user?.roleId ?? ("" as RoleId), status: user?.status ?? "invited", ...(withPassword && !user ? { password: "" } : {}) };
 
 	return (
-		<Formik<Values> initialValues={initial} validationSchema={schema} onSubmit={submit}>
+		<Formik<Values> initialValues={initial} validationSchema={withPassword && !user ? passwordSchema(passwordMinLength) : schema} onSubmit={submit}>
 			{({ isSubmitting, status }) => (
 				<SheetForm>
 					<SheetBody>
@@ -145,7 +150,8 @@ export const UserForm = ({ user, roles, isSelf = false, onDone, onCancel }: User
 						) : (
 							<>
 								<TextField name="name" label="Nombre" required autoComplete="name" />
-								<TextField name="email" label="Correo de trabajo" type="email" required autoComplete="email" hint="Se enviará una invitación. El usuario define su propia contraseña de buzon-sol." />
+								<TextField name="email" label="Correo de trabajo" type="email" required autoComplete="email" hint={withPassword ? undefined : "Se enviará una invitación. El usuario define su propia contraseña de buzon-sol."} />
+								{withPassword && <TextField name="password" label="Contraseña inicial" type="password" required autoComplete="new-password" hint={`Mínimo ${passwordMinLength} caracteres. Entréguela al usuario por un canal seguro; no se envía por correo ni se vuelve a mostrar.`} />}
 							</>
 						)}
 						<RoleField roles={roles} />

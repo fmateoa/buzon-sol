@@ -38,6 +38,35 @@ export function validateFile(response: FileResponse, kind: "attachment" | "gener
   return { bytes: response.bytes, mime, sha256: createHash("sha256").update(response.bytes).digest("hex") };
 }
 
+export interface StorableAsset { id: string; item_id: string; kind: "attachment" | "generated_document" }
+
+/**
+ * Validates and stores one fetched file. Nothing is written unless the bytes match an allowed type; any failure
+ * leaves the asset `failed`. The caller holds the account lock.
+ */
+export async function storeFile(db: DataSource, store: ObjectStore, accountId: string, asset: StorableAsset,
+  fetch: () => Promise<FileResponse>): Promise<void> {
+  const objectKey = `${accountId}/${asset.item_id}/${asset.id}`;
+  try {
+    const response = await fetch();
+    const validated = validateFile(response, asset.kind);
+    try {
+      if (asset.kind === "generated_document") {
+        // Keep SUNAT's original in the private bucket; the API serves only the sanitized copy.
+        await store.put(`${objectKey}.original`, response.bytes, "text/html");
+      }
+      await store.put(objectKey, validated.bytes, validated.mime);
+    } catch { throw new AppError("storage_unavailable"); }
+    await db.query(
+      "UPDATE file_assets SET object_key=?,mime_type=?,size_bytes=?,sha256=?,state='stored' WHERE id=? AND account_id=?",
+      [objectKey, validated.mime, validated.bytes.length, validated.sha256, asset.id, accountId],
+    );
+  } catch (error) {
+    await db.query("UPDATE file_assets SET state='failed' WHERE id=? AND account_id=? AND state<>'stored'", [asset.id, accountId]);
+    throw error;
+  }
+}
+
 export class FileProcessor {
   constructor(private readonly db: DataSource, private readonly client: FileClient, private readonly store: ObjectStore) {}
 
@@ -57,23 +86,8 @@ export class FileProcessor {
       if (!asset) throw new AppError("not_found");
       if (asset.state === "stored") return;
       await authorize?.();
-      const objectKey = `${accountId}/${asset.item_id}/${fileId}`;
-      try {
-        const response = await this.client.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
-        const validated = validateFile(response, asset.kind);
-        if (asset.kind === "generated_document") {
-          // Keep SUNAT's original in the private bucket; the API serves only the sanitized copy.
-          await this.store.put(`${objectKey}.original`, response.bytes, "text/html");
-        }
-        await this.store.put(objectKey, validated.bytes, validated.mime);
-        await this.db.query(
-          "UPDATE file_assets SET object_key=?,mime_type=?,size_bytes=?,sha256=?,state='stored' WHERE id=? AND account_id=?",
-          [objectKey, validated.mime, validated.bytes.length, validated.sha256, fileId, accountId],
-        );
-      } catch (error) {
-        await this.db.query("UPDATE file_assets SET state='failed' WHERE id=? AND account_id=? AND state<>'stored'", [fileId, accountId]);
-        throw error;
-      }
+      const response = async () => this.client.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
+      await storeFile(this.db, this.store, accountId, asset, response);
     } finally {
       if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
       await lease.release();

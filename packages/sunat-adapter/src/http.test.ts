@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AppError } from "@buzon-sol/domain";
 import { SunatHttpSession } from "./http.js";
-import { parseAlerts, parseFolders } from "./catalogs.js";
+import { parseAlerts, parseFolders, parseLabels } from "./catalogs.js";
 
 const credential = { ruc: "11111111111", solUser: "TESTUSER", password: "TESTPASS" };
 const login = "https://api-seguridad.sunat.gob.pe/v1/clientessol/client/oauth2/loginMenuSol?originalUrl=menu&amp;state=test-state";
@@ -61,7 +61,7 @@ test("HTTP session follows SOL login, keeps cookies per origin, and never reques
   try {
     assert.equal(await session.testConnection(), "valid");
     assert.equal(parseFolders(await session.listFolders())[0]?.code, "03");
-    assert.equal((await session.visorHtml()).contentType, "text/html");
+    assert.deepEqual(parseLabels(await session.visorHtml()), [{ code: "14", name: "Fixture", color: "#fff", messageCount: 0 }]);
     assert.deepEqual(parseAlerts(await session.consultAlerts()).alerts, []);
   }
   finally { await session.close(); }
@@ -239,6 +239,15 @@ test("attachment zero and generated HTML follow their own detail in the same ses
     const generated = await session.fetchGeneratedDocument("messages", "123", "55");
     assert.equal(generated.verifiedGeneratedDocument, true);
     assert.deepEqual(sequence, ["detail", "attachment", "detail", "generated"]);
+    // The archive opens one detail and downloads its files without reopening it.
+    sequence.length = 0;
+    const detail = await session.readDetail("messages", "123");
+    assert.equal((await session.downloadAttachment("0")).filename, "fixture.pdf");
+    assert.equal((await session.downloadGeneratedDocument(detail.generatedUrl!)).verifiedGeneratedDocument, true);
+    assert.deepEqual(sequence, ["detail", "attachment", "generated"]);
+    await assert.rejects(session.downloadGeneratedDocument("https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor/master"),
+      (error) => error instanceof AppError && error.code === "schema_changed");
+    assert.deepEqual(sequence, ["detail", "attachment", "generated"]);
     await assert.rejects(session.fetchAttachment("messages", "456", "0"),
       (error) => error instanceof AppError && error.code === "schema_changed");
   } finally { await session.close(); }

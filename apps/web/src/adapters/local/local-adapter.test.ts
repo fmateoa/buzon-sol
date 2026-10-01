@@ -144,3 +144,32 @@ describe("adaptador local · Clave SOL de solo escritura", () => {
 		if (!result.ok) expect(Object.keys(result.error.fields ?? {})).toEqual(expect.arrayContaining(["windowEnd", "days", "boxes"]));
 	});
 });
+
+describe("adaptador local · configuraciones", () => {
+	it("solo quien tiene manage_settings las ve o las cambia", async () => {
+		const analyst = make("usuario3@empresa-demo.test");
+		await expect(analyst.listSettings()).rejects.toMatchObject({ code: "forbidden" });
+		const result = await analyst.saveSettings({ "session.idleMinutes": 10 });
+		expect(result.ok).toBe(false);
+	});
+
+	it("valida rango, y que la inactividad no supere la duración máxima", async () => {
+		const admin = make("admin@empresa-demo.test");
+		const tooLow = await admin.saveSettings({ "security.maxFailedLogins": 1 });
+		expect(tooLow.ok).toBe(false);
+		if (!tooLow.ok) expect(tooLow.error.fields).toHaveProperty("security.maxFailedLogins");
+		const inverted = await admin.saveSettings({ "session.absoluteMinutes": 30, "session.idleMinutes": 60 });
+		expect(inverted.ok).toBe(false);
+		if (!inverted.ok) expect(inverted.error.fields).toHaveProperty("session.idleMinutes");
+		expect((await admin.listSettings()).find((s) => s.key === "session.idleMinutes")?.value).toBe(60);
+	});
+
+	it("guarda, deja rastro en auditoría y la contraseña mínima llega a la sesión", async () => {
+		const admin = make("admin@empresa-demo.test");
+		const saved = await admin.saveSettings({ "security.passwordMinLength": 16 });
+		expect(saved.ok).toBe(true);
+		expect((await admin.getSession())?.passwordMinLength).toBe(16);
+		const audit = await admin.listAudit({ filters: { action: "all", objectType: "settings", actor: "all", range: "all" }, sort: null, page: 1, pageSize: 10 });
+		expect(audit.rows).toHaveLength(1);
+	});
+});

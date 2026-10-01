@@ -160,7 +160,7 @@ La ruta completa procede del campo `url` del detalle y puede incluir datos perso
 
 ### Etiquetas
 
-El catálogo `listEtiquetas` está integrado en el HTML/JavaScript de `GET /master`; no se observó un endpoint separado para listarlo. Cada enlace de etiqueta envió `GET /listNotiMenPag` con `codEtiqueta` y con `tipoMsj` y `codCarpeta` vacíos.
+El catálogo `listEtiquetas` está integrado en el HTML/JavaScript de `GET /master` como `var listEtiquetas = $.parseJSON('[...]')` (cadena JavaScript con JSON; S-11); no se observó un endpoint separado para listarlo. El adaptador lo lee como dato, sin ejecutar scripts. Cada enlace de etiqueta envió `GET /listNotiMenPag` con `codEtiqueta` y con `tipoMsj` y `codCarpeta` vacíos.
 
 | Código | Nombre | Color |
 |---|---|---|

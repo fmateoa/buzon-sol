@@ -13,6 +13,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
 	configure_schedule: "Configurar programador",
 	manage_accounts: "Gestionar cuentas SUNAT y credenciales",
 	manage_users_roles: "Gestionar usuarios y roles",
+	manage_settings: "Gestionar configuraciones (sesión y seguridad)",
 };
 
 /** Permisos cuyo uso puede cambiar el estado de un elemento en SUNAT. */

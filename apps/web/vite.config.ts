@@ -8,5 +8,10 @@ export default defineConfig({
 	resolve: {
 		alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
 	},
-	server: { port: 5173, strictPort: true },
+	server: {
+		port: 5173,
+		strictPort: true,
+		// Mismo origen que la app: el navegador no necesita CORS para hablar con la API.
+		proxy: { "/api": process.env.BUZON_API_URL ?? "http://127.0.0.1:38080" },
+	},
 });

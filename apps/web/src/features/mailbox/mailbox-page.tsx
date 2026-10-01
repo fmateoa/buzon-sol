@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router";
 import { Button } from "lizaui/button";
 import { Table } from "lizaui/table";
@@ -7,15 +7,13 @@ import type { MailBox, MailItemMetadata, MailListFilters, MailSortColumn, MailPa
 import { ListTable, type ColumnDef } from "@/components/custom/list-table";
 import { EmptyState } from "@/components/custom/layout-bits";
 import { QueryError } from "@/components/custom/query-error";
-import { RemoteEffectBadge, RemoteStateDot, TagChip } from "@/components/custom/status";
+import { RemoteStateDot, TagChip } from "@/components/custom/status";
 import { useAccountId, useActiveAccount } from "@/features/accounts/account-guard";
 import { useFolders, useSummary, useTags } from "@/features/accounts/queries";
-import { useCan } from "@/features/session/use-session";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { useListState } from "@/hooks/use-list-state";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
-import { BulkReadDialog } from "./bulk-read-dialog";
 import { CredentialPausedNotice, InventoryNotice } from "./inventory-notice";
 import { DesktopFilters, EMPTY_MAIL_FILTERS, MobileFilters, type MailListState } from "./mail-filters";
 import { useMailList } from "./queries";
@@ -94,7 +92,7 @@ const MobileList = ({ page, state, box, empty }: { page: MailPage | undefined; s
 		<div className="flex flex-col gap-3">
 			<ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-paper" aria-label={box === "messages" ? "Mensajes" : "Notificaciones"}>
 				{rows.map((m) => (
-					<li key={m.id} className={m.remoteState === "unread" ? "bg-paper" : "bg-row-read"}>
+					<li key={m.id} className="bg-paper">
 						<Link to={`/c/${accountId}/${boxPath(box)}/${m.id}`} className="flex min-h-16 flex-col gap-1 px-4 py-3">
 							<span className="flex items-start gap-2">
 								<span aria-hidden="true" className={cn("mt-0.5 text-xs", m.remoteState === "unread" ? "text-brand" : "text-foreground-400")}>
@@ -144,9 +142,7 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 	const account = useActiveAccount();
 	const isMobile = useIsMobile();
 	const navigate = useNavigate();
-	const canRead = useCan("read_content");
 	const [params, setParams] = useSearchParams();
-	const [bulkOpen, setBulkOpen] = useState(false);
 
 	const state = useListState<MailListFilters, MailSortColumn>({ persistKey: "bandeja-v1", initialFilters: EMPTY_MAIL_FILTERS, textKeys: ["query"], initialPageSize: 20 });
 	const list = useMailList(accountId, box, state.request);
@@ -166,13 +162,6 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 		if (reviewParam === "pendiente") setFilter("review", "pending");
 		setParams({}, { replace: true });
 	}, [folderParam, tagParam, reviewParam, setFilter, setParams]);
-
-	const blocked = account.connection.pauseReason === "invalid_credential" || account.connection.pauseReason === "needs_credential" || !account.active;
-	const selectable = canRead && !blocked;
-	const unreadSelected = useMemo(() => {
-		const ids = new Set(state.selection.map((s) => s.id));
-		return (list.data?.rows ?? []).filter((r) => ids.has(r.id) && r.remoteState === "unread");
-	}, [state.selection, list.data]);
 
 	const page = list.data;
 	const coverage = page?.coverage;
@@ -233,29 +222,11 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 					onRetry={() => void list.refetch()}
 					rowKey={(m) => m.id}
 					rowName={(m) => m.subject}
-					selectable={selectable}
-					isSelectable={(m) => m.remoteState === "unread"}
-					rowClassName={(m) => (m.remoteState === "unread" ? "bg-paper" : "bg-row-read")}
 					emptyContent={empty}
 					actionLabel="Detalle"
 					actionWidth={80}
 					countNoun={[one, many]}
-					batchBar={
-						state.selection.length > 0 && (
-							<div className="flex flex-wrap items-center gap-3 rounded-lg border border-effect bg-effect-softer px-4 py-2.5 text-sm" role="region" aria-label="Acciones de selección">
-								<span className="font-semibold text-ink">{formatCount(state.selection.length)} seleccionados</span>
-								<RemoteEffectBadge />
-								<div className="ml-auto flex gap-2">
-									<Button size="sm" variant="light" onClick={state.clearSelection}>
-										Quitar selección
-									</Button>
-									<Button size="sm" color="warning" variant="bordered" disabled={unreadSelected.length === 0} onClick={() => setBulkOpen(true)}>
-										Leer contenido de {formatCount(unreadSelected.length)}…
-									</Button>
-								</div>
-							</div>
-						)
-					}
+						hideSummary
 					renderCells={(m) => (
 						<>
 							<Table.BodyColumn>
@@ -303,8 +274,6 @@ export const MailboxPage = ({ box }: { box: MailBox }) => {
 					)}
 				/>
 			)}
-
-			<BulkReadDialog accountId={accountId} open={bulkOpen} onClose={() => setBulkOpen(false)} items={unreadSelected} onFinished={state.clearSelection} />
 		</div>
 	);
 };

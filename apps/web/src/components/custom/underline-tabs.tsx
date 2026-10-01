@@ -10,7 +10,11 @@ export const UnderlineTabsList = ({ className, ...props }: ComponentProps<typeof
 	<TabsList className={cn("h-auto w-auto justify-start gap-6 rounded-none bg-transparent p-0", className)} {...props} />
 );
 
-export const UnderlineTabsTrigger = ({ className, ...props }: ComponentProps<typeof TabsTrigger>) => (
+/**
+ * La pestaña activa va en negrita, que es más ancha: una copia invisible en negrita fija el ancho
+ * de cada pestaña para que al cambiar de una a otra las demás no se muevan.
+ */
+export const UnderlineTabsTrigger = ({ className, children, ...props }: ComponentProps<typeof TabsTrigger>) => (
 	<TabsTrigger
 		className={cn(
 			"h-auto flex-none rounded-none border-0 border-b-3 border-transparent px-0 pt-1 pb-2 text-[15px] font-normal text-muted-ink shadow-none hover:text-ink",
@@ -20,5 +24,12 @@ export const UnderlineTabsTrigger = ({ className, ...props }: ComponentProps<typ
 			className,
 		)}
 		{...props}
-	/>
+	>
+		<span className="inline-grid">
+			<span className="col-start-1 row-start-1">{children}</span>
+			<span aria-hidden="true" className="invisible col-start-1 row-start-1 font-bold">
+				{children}
+			</span>
+		</span>
+	</TabsTrigger>
 );

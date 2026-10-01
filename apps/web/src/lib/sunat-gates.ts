@@ -1,5 +1,5 @@
 /**
- * Puertas de validación con SUNAT (backend/spec.md §6, plan/sunat-integration.md).
+ * Puertas de validación con SUNAT (backend/spec.md §6, plan/02-sunat-integration.md).
  * Mientras una puerta no se supere, la interfaz NO afirma la capacidad asociada.
  * Cambiar estos valores exige evidencia incorporada al contrato SUNAT.
  */

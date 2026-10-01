@@ -8,7 +8,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test:integration": "node --import tsx --test test/*.test.ts",
+    "test:integration": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
     "migration:run": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:run",
     "migration:revert": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:revert",
     "migration:show": "typeorm-ts-node-commonjs -d src/db/data-source.ts migration:show",

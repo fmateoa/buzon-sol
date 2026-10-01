@@ -11,6 +11,7 @@ import { useActivity, useResumeRun, useStartInventory } from "@/features/account
 import { CredentialPausedNotice } from "@/features/mailbox/inventory-notice";
 import { useCan } from "@/features/session/use-session";
 import { cn } from "@/lib/cn";
+import { ArchiveSection } from "./archive-section";
 import { errorCopy } from "@/lib/errors";
 import { formatCount, formatRelative, formatTime } from "@/lib/format";
 import { INVENTORY_LOGIN_NOTE } from "@/lib/sunat-gates";
@@ -135,6 +136,8 @@ export const ActivityPage = () => {
 							<BoxProgressCard key={p.box} p={p} pauseReason={data.connection.pauseReason} />
 						))}
 					</div>
+
+					<ArchiveSection accountId={accountId} blocked={credentialPaused || running} />
 
 					<Notice tone="info" role="note">
 						<strong>Leído en SUNAT</strong>: estado que informa SUNAT; cambia al abrir el contenido. <strong>Revisado en buzon-sol</strong>: marca interna suya; no se envía a SUNAT.

@@ -1,6 +1,6 @@
 # Plan independiente · Integración con SUNAT Buzón SOL
 
-**Propósito:** validar y construir el adaptador que extrae datos del Buzón SOL para la aplicación v2. Este plan cubre la frontera SUNAT y sus pruebas con cuentas autorizadas; [backend.md](backend.md) cubre API, worker, base de datos, colas y almacenamiento. Los servicios son **internos de la web**, no una API pública ni un contrato estable.
+**Propósito:** validar y construir el adaptador que extrae datos del Buzón SOL para la aplicación v2. Este plan cubre la frontera SUNAT y sus pruebas con cuentas autorizadas; [01-backend.md](01-backend.md) cubre API, worker, base de datos, colas y almacenamiento. Los servicios son **internos de la web**, no una API pública ni un contrato estable.
 
 ## Fuentes y regla de evidencia
 
@@ -67,7 +67,7 @@ Estas pruebas usan solo registros de una cuenta autorizada. Preferir ya leídos 
 | S-19 Ritmo y capacidad | Medir duración de login, páginas, detalle y descarga; iniciar con peticiones secuenciales por cuenta y concurrencia global baja configurable. Registrar errores y pausas; no inventar un límite oficial de SUNAT. |
 | S-20 Compatibilidad | Comparar respuestas nuevas con fixtures redactados: campos obligatorios, tipos, MIME, HTML del visor y catálogo. Un cambio incompatible produce `schema_changed` y detiene solo la cuenta afectada. |
 
-**Entrega de esta fase:** informe de decisión del transporte, matriz S-01–S-20 con `pasa | falla | pendiente | no aplica`, fecha, cuenta de prueba anonimizada, entorno y evidencia redactada. Actualizar [contracts.md](../sunat/contracts.md) solo con hechos nuevos; mantener separadas observación e inferencia. Incorporar las pruebas de contrato al adaptador y comunicar al [plan backend](backend.md) qué funciones pueden activarse.
+**Entrega de esta fase:** informe de decisión del transporte, matriz S-01–S-20 con `pasa | falla | pendiente | no aplica`, fecha, cuenta de prueba anonimizada, entorno y evidencia redactada. Actualizar [contracts.md](../sunat/contracts.md) solo con hechos nuevos; mantener separadas observación e inferencia. Incorporar las pruebas de contrato al adaptador y comunicar al [plan backend](01-backend.md) qué funciones pueden activarse.
 
 ## Criterio de liberación
 

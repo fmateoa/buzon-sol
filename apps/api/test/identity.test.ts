@@ -219,6 +219,36 @@ test("API enforces account scope and immediate revocation", { skip: process.env.
 
     const accounts = await request("GET", "/api/v1/accounts", token);
     assert.deepEqual(accounts.json().map((row: { id: string }) => row.id), [a]);
+
+    // Management views consumed by the frontend adapter.
+    type Listed = Record<string, unknown> & { id: string };
+    const list = async (url: string, bearer = adminToken): Promise<Listed[]> => (await request("GET", url, bearer)).json();
+    assert.equal(accounts.json()[0].scheduleState, "disabled");
+    const me = (await request("GET", "/api/v1/auth/me", token)).json();
+    assert.deepEqual([me.roleName, me.preferences], [`Analista ${suffix}`, { readWarningEnabled: true }]);
+    assert.equal((await request("PATCH", "/api/v1/auth/me/preferences", token, { readWarningEnabled: "no" })).statusCode, 400);
+    assert.equal((await request("PATCH", "/api/v1/auth/me/preferences", token, { readWarningEnabled: false })).statusCode, 204);
+    assert.equal((await request("GET", "/api/v1/auth/me", token)).json().preferences.readWarningEnabled, false);
+    const listedUser = (await list("/api/v1/users")).find((row) => row.id === userId);
+    assert.equal(listedUser?.roleName, `Analista ${suffix}`);
+    assert.ok(listedUser?.lastLoginAt);
+    assert.equal((await list("/api/v1/roles")).find((row) => row.id === roleId)?.userCount, 1);
+    assert.equal((await request("GET", "/api/v1/admin/account-options", secondToken)).statusCode, 403);
+    assert.deepEqual((await list("/api/v1/admin/account-options")).find((row) => row.id === createdAccountId),
+      { id: createdAccountId, alias: "Ficticia" });
+    assert.equal((await request("GET", `/api/v1/admin/accounts/${a}/users`, token)).statusCode, 403);
+    const accountUserIds = (await list(`/api/v1/admin/accounts/${a}/users`)).map((row) => row.id);
+    assert.deepEqual([accountUserIds.includes(userId), accountUserIds.includes(adminId), accountUserIds.includes(secondUser.json().id)],
+      [true, true, false]);
+    assert.equal((await request("PATCH", `/api/v1/admin/accounts/${createdAccountId}`, adminToken, { alias: "Ficticia" })).statusCode, 204);
+    const listedAccount = (await list("/api/v1/admin/accounts")).find((row) => row.id === createdAccountId);
+    assert.deepEqual([listedAccount?.solUserMasked, listedAccount?.credentialStatus, listedAccount?.scheduleState],
+      // The Redis branch above marks the credential valid to exercise a queued inventory.
+      ["US***", process.env.BUZON_TEST_REDIS === "1" ? "valid" : "untested", "disabled"]);
+    assert.ok(listedAccount?.credentialSavedAt && listedAccount.createdAt && Number(listedAccount.userCount) >= 1);
+    const auditRows = await list("/api/v1/audit");
+    assert.ok(auditRows.some((row) => row.objectType === "role" && row.objectName === `Analista ${suffix}` && row.actorName === "Admin"));
+    assert.ok(auditRows.some((row) => row.objectType === "account" && row.accountAlias === "Ficticia"));
     assert.equal((await request("GET", `/api/v1/accounts/${b}/mail`, token)).statusCode, 403);
     assert.equal((await request("GET", `/api/v1/accounts/${a}/mail`, token)).statusCode, 200);
     const reviewUrl = `/api/v1/accounts/${a}/items/${aItemId}/review`;

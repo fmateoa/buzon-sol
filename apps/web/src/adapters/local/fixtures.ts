@@ -6,6 +6,7 @@
 import type {
 	AccountId,
 	AuditEntry,
+	SettingKey,
 	InventoryCoverage,
 	InventoryRun,
 	ItemId,
@@ -61,7 +62,7 @@ export const ROLES: RoleRecord[] = [
 	{
 		id: ROLE_IDS.admin,
 		name: "Administrador",
-		permissions: ["view_mailbox", "read_content", "download_file", "mark_reviewed", "run_inventory", "view_audit", "configure_schedule", "manage_accounts", "manage_users_roles"],
+		permissions: ["view_mailbox", "read_content", "download_file", "mark_reviewed", "run_inventory", "view_audit", "configure_schedule", "manage_accounts", "manage_users_roles", "manage_settings"],
 		allAccounts: true,
 		accountIds: [],
 	},
@@ -556,3 +557,12 @@ export const buildAudit = (): AuditEntry[] => [
 ];
 
 export type { PauseReason };
+
+/** Mismos valores por defecto y rangos que el servidor (`SETTING_DEFINITIONS` en packages/domain). */
+export const SETTING_DEFINITIONS: Record<SettingKey, { default: number; min: number; max: number }> = {
+	"session.absoluteMinutes": { default: 720, min: 15, max: 43200 },
+	"session.idleMinutes": { default: 60, min: 5, max: 43200 },
+	"security.passwordMinLength": { default: 12, min: 8, max: 64 },
+	"security.maxFailedLogins": { default: 5, min: 3, max: 20 },
+	"security.lockoutMinutes": { default: 15, min: 1, max: 1440 },
+};

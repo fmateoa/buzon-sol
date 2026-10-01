@@ -2,13 +2,18 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Table } from "lizaui/table";
 import type { InventoryRun } from "@/domain/types";
-import { FilterSelect, ListFooter } from "@/components/custom/list-table";
+import { FilterSelect, ListFooter, TABLE_ROW_CLASS } from "@/components/custom/list-table";
 import { BlockSkeleton, EmptyState, PageHeader } from "@/components/custom/layout-bits";
 import { QueryError } from "@/components/custom/query-error";
 import { boxLabel } from "@/components/custom/status";
 import { cn } from "@/lib/cn";
 import { formatRelative } from "@/lib/format";
-import { useScheduledRuns } from "./queries";
+import { Button } from "lizaui/button";
+import { AppError, type AppErrorCode } from "@/domain/adapter";
+import { Notice } from "@/components/custom/notice";
+import { useCan } from "@/features/session/use-session";
+import { errorCopy } from "@/lib/errors";
+import { useScheduledRuns, useStartAllInventories } from "./queries";
 
 type Row = InventoryRun & { accountAlias: string };
 
@@ -32,6 +37,10 @@ const COLUMNS = [
 /** Actividad programada: consultas de todas las cuentas (solo lectura). */
 export const ScheduledRunsPage = () => {
 	const runs = useScheduledRuns();
+	const canRun = useCan("run_inventory");
+	const startAll = useStartAllInventories();
+	const started = startAll.data?.filter((r) => r.started).length ?? 0;
+	const skipped = startAll.data?.filter((r) => !r.started) ?? [];
 	const [account, setAccount] = useState("all");
 	const [state, setState] = useState("all");
 	const [page, setPage] = useState({ page: 1, size: 20 });
@@ -42,7 +51,35 @@ export const ScheduledRunsPage = () => {
 
 	return (
 		<div className="flex flex-col gap-5">
-			<PageHeader title="Actividad programada" description="Consultas de todas las cuentas: programadas, manuales y pruebas de conexión." />
+			<PageHeader
+				title="Actividad programada"
+				description="Consultas de todas las cuentas: programadas, manuales y pruebas de conexión."
+				actions={
+					canRun && (
+						<Button color="primary" onClick={() => startAll.mutate(undefined)} disabled={startAll.isPending} isLoading={startAll.isPending} className="min-h-11">
+							Consultar todas las cuentas
+						</Button>
+					)
+				}
+			/>
+			{startAll.isError && (
+				<Notice tone="error" role="alert" title={errorCopy(startAll.error).title}>
+					{errorCopy(startAll.error).body}
+				</Notice>
+			)}
+			{startAll.data && (
+				<Notice tone={skipped.length ? "partial" : "success"} title={`${started} ${started === 1 ? "consulta iniciada" : "consultas iniciadas"}. Cada cuenta usa su propia sesión de SUNAT.`}>
+					{skipped.length > 0 && (
+						<ul className="list-disc pl-5">
+							{skipped.map((r) => (
+								<li key={r.accountId}>
+									{r.alias}: {errorCopy(new AppError((r.errorCode ?? "remote_unavailable") as AppErrorCode)).title ?? "no se pudo iniciar"}
+								</li>
+							))}
+						</ul>
+					)}
+				</Notice>
+			)}
 			<div className="flex flex-wrap gap-3">
 				<label className="flex flex-col gap-0.5 text-xs text-muted-ink">
 					Cuenta
@@ -63,7 +100,7 @@ export const ScheduledRunsPage = () => {
 					</Table.Header>
 					<Table.Body<Row> data={visible} rowKey={(r) => r.id} emptyContent={<EmptyState title="No hay consultas con estos filtros" />}>
 						{({ item: r }) => (
-							<Table.BodyRow keyCurrent={{ id: r.id, name: r.accountAlias }} isCheck={false}>
+							<Table.BodyRow keyCurrent={{ id: r.id, name: r.accountAlias }} isCheck={false} className={TABLE_ROW_CLASS}>
 								<Table.BodyColumn className="mono text-xs">{formatRelative(r.startedAt)}</Table.BodyColumn>
 								<Table.BodyColumn>
 									<Link to={`/admin/cuentas/${r.accountId}?tab=programador`} className="text-sm font-medium text-ink hover:underline">

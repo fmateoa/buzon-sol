@@ -34,8 +34,12 @@ export class SchedulingService {
   async save(actor: Principal, accountId: string, input: Input): Promise<void> {
     this.auth.requireAccount(actor, "configure_schedule", validId(accountId));
     const schedule = validateSchedule(input);
-    if (input.state === "active") throw new AppError("remote_unavailable");
-    if (input.state !== "disabled" && input.state !== "paused") throw new AppError("validation");
+    if (input.state !== "disabled" && input.state !== "paused" && input.state !== "active") throw new AppError("validation");
+    const active = input.state === "active";
+    // Unattended runs need the inventory transport and the cron criterion of the SUNAT plan, both set by the operator.
+    if (active && (process.env.SUNAT_CRON_VALIDATED !== "true" || process.env.SUNAT_TRANSPORT_VALIDATED !== "true")) {
+      throw new AppError("remote_unavailable");
+    }
     if (!Array.isArray(input.boxes) || input.boxes.length === 0 ||
         !input.boxes.every((box) => box === "messages" || box === "notifications") ||
         typeof input.downloadReadAttachments !== "boolean" ||
@@ -46,20 +50,29 @@ export class SchedulingService {
       const accounts: { active: number }[] = await manager.query("SELECT active FROM sunat_accounts WHERE id=?", [accountId]);
       if (!accounts.length) throw new AppError("not_found");
       if (!accounts[0].active) throw new AppError("paused");
+      if (active) {
+        const credentials: { status: string }[] = await manager.query(
+          "SELECT status FROM sunat_credentials WHERE account_id=? ORDER BY version DESC LIMIT 1", [accountId]);
+        if (!credentials.length) throw new AppError("needs_credential");
+        if (credentials[0].status !== "valid") throw new AppError("invalid_credential");
+      }
+      const nextRunAt = active ? nextRuns(schedule, new Date(), 1)[0] ?? null : null;
+      if (active && !nextRunAt) throw new AppError("validation");
       await manager.query(
         `INSERT INTO sync_schedules
          (id,account_id,frequency,days_json,window_start,window_end,boxes_json,state,
           download_read_attachments,notify_in_app,notify_daily_email,remote_effect_accepted,pause_reason,next_run_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE frequency=VALUES(frequency),days_json=VALUES(days_json),
            window_start=VALUES(window_start),window_end=VALUES(window_end),boxes_json=VALUES(boxes_json),
            state=VALUES(state),download_read_attachments=VALUES(download_read_attachments),
            notify_in_app=VALUES(notify_in_app),notify_daily_email=VALUES(notify_daily_email),
-           remote_effect_accepted=VALUES(remote_effect_accepted),pause_reason=VALUES(pause_reason),next_run_at=NULL`,
+           remote_effect_accepted=VALUES(remote_effect_accepted),pause_reason=VALUES(pause_reason),
+           next_run_at=VALUES(next_run_at)`,
         [randomUUID(), accountId, schedule.frequency, JSON.stringify(schedule.days), schedule.windowStart,
           schedule.windowEnd, JSON.stringify([...new Set(input.boxes as string[])]), input.state,
           input.downloadReadAttachments, input.notifyInApp, false, input.remoteEffectAccepted,
-          input.state === "paused" ? "manual" : null],
+          input.state === "paused" ? "manual" : null, nextRunAt],
       );
       await manager.query(
         "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",

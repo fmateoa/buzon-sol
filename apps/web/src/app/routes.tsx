@@ -19,6 +19,7 @@ const UsersAdminPage = lazy(() => import("@/features/admin/users-page").then((m)
 const RolesAdminPage = lazy(() => import("@/features/admin/roles-page").then((m) => ({ default: m.RolesAdminPage })));
 const ScheduledRunsPage = lazy(() => import("@/features/admin/scheduled-runs-page").then((m) => ({ default: m.ScheduledRunsPage })));
 const AccountSchedulePage = lazy(() => import("@/features/admin/account-schedule-page").then((m) => ({ default: m.AccountSchedulePage })));
+const SettingsPage = lazy(() => import("@/features/admin/settings-page").then((m) => ({ default: m.SettingsPage })));
 const AuditPage = lazy(() => import("@/features/admin/audit-page").then((m) => ({ default: m.AuditPage })));
 
 const Lazy = ({ children }: { children: ReactNode }) => <Suspense fallback={<BlockSkeleton lines={6} label="Cargando sección" />}>{children}</Suspense>;
@@ -57,6 +58,7 @@ export const routes: RouteObject[] = [
 							{ path: "usuarios", element: <RequirePermission permission="manage_users_roles"><Lazy><UsersAdminPage /></Lazy></RequirePermission> },
 							{ path: "roles", element: <RequirePermission permission="manage_users_roles"><Lazy><RolesAdminPage /></Lazy></RequirePermission> },
 							{ path: "actividad", element: <RequirePermission permission="manage_accounts"><Lazy><ScheduledRunsPage /></Lazy></RequirePermission> },
+							{ path: "configuraciones", element: <RequirePermission permission="manage_settings"><Lazy><SettingsPage /></Lazy></RequirePermission> },
 							{ path: "auditoria", element: <RequirePermission permission="view_audit"><Lazy><AuditPage /></Lazy></RequirePermission> },
 						],
 					},

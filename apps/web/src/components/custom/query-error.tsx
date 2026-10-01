@@ -4,7 +4,7 @@ import { Notice } from "./notice";
 
 export const QueryError = ({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) => {
 	const copy = errorCopy(error);
-	const retryable = !isAppError(error, "forbidden") && !isAppError(error, "not_found");
+	const retryable = !isAppError(error, "forbidden") && !isAppError(error, "not_found") && !isAppError(error, "pending_integration");
 	return (
 		<Notice
 			tone="error"

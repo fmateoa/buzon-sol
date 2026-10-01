@@ -77,7 +77,21 @@ export const NoContentBadge = ({ className }: { className?: string }) => (
 	</span>
 );
 
+/**
+ * Colores por código cuando el catálogo no trae uno: los del buzón real de SUNAT (contracts.md, 10–20)
+ * y los de los datos ficticios del prototipo (01–06).
+ */
 const TAG_COLORS: Record<string, string> = {
+	"10": "#ce0d0e",
+	"11": "#ff9200",
+	"12": "#00afff",
+	"13": "#89bd12",
+	"14": "#00b27e",
+	"15": "#ff4546",
+	"16": "#d45aed",
+	"18": "#daf7a6",
+	"19": "#ffc857",
+	"20": "#a0522d",
 	"01": "#3F6FA3",
 	"02": "#A3553F",
 	"03": "#6A5AA3",
@@ -86,7 +100,8 @@ const TAG_COLORS: Record<string, string> = {
 	"06": "#7A8591",
 };
 
-export const tagColor = (tag: SunatTag) => (tag.known ? TAG_COLORS[tag.code] : undefined) ?? "#AEB5BD";
+/** Color de SUNAT si es un hex válido; si no, el de los datos ficticios por código, o el neutro. */
+export const tagColor = (tag: SunatTag) => (tag.known && tag.color && /^#[0-9a-f]{3,8}$/i.test(tag.color) ? tag.color : undefined) ?? TAG_COLORS[tag.code] ?? "#AEB5BD";
 
 /** Etiqueta SUNAT. Un código desconocido se muestra neutro con borde discontinuo y nombre completo accesible. */
 export const TagChip = ({ tag, className }: { tag: SunatTag | null; className?: string }) => {

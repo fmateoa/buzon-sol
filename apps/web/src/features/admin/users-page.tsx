@@ -85,7 +85,7 @@ export const UsersAdminPage = () => {
 				description={users.data ? `${users.data.total} usuarios · ${roleList.length} roles` : undefined}
 				actions={
 					<>
-						<ColumnMenu columns={COLUMNS} hidden={state.hiddenColumns} onToggle={state.toggleColumn} />
+						<ColumnMenu columns={COLUMNS} hidden={state.hiddenColumns} onToggle={state.toggleColumn} className="min-h-10" />
 						<Button color="primary" startContent={<Plus className="size-4" aria-hidden="true" />} onClick={() => setEditing("new")} className="min-h-10">
 							Dar de alta usuario
 						</Button>

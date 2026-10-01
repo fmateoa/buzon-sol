@@ -1,4 +1,4 @@
-import { Activity, Bell, Building2, CalendarClock, LayoutDashboard, Mail, ScrollText, ShieldCheck, UserRound, Users, type LucideIcon } from "lucide-react";
+import { Activity, Bell, Building2, CalendarClock, LayoutDashboard, Mail, ScrollText, Settings, ShieldCheck, UserRound, Users, type LucideIcon } from "lucide-react";
 import type { AccountId, Permission } from "@/domain/types";
 
 export interface NavItem {
@@ -25,5 +25,6 @@ export const adminNav: NavItem[] = [
 	{ key: "usuarios", label: "Usuarios", icon: Users, to: "/admin/usuarios", permission: "manage_users_roles" },
 	{ key: "roles", label: "Roles y permisos", icon: ShieldCheck, to: "/admin/roles", permission: "manage_users_roles" },
 	{ key: "programada", label: "Actividad programada", icon: CalendarClock, to: "/admin/actividad", permission: "manage_accounts" },
+	{ key: "configuraciones", label: "Configuraciones", icon: Settings, to: "/admin/configuraciones", permission: "manage_settings" },
 	{ key: "auditoria", label: "Auditoría", icon: ScrollText, to: "/admin/auditoria", permission: "view_audit" },
 ];

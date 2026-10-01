@@ -560,6 +560,10 @@
 	* {
 		@apply border-border;
 	}
+	html {
+		/* Reserva el ancho de la barra de desplazamiento: al cambiar de pestaña el contenido no salta de lado. */
+		scrollbar-gutter: stable;
+	}
 	html,
 	body {
 		@apply bg-background text-foreground font-sans antialiased;

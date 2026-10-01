@@ -95,9 +95,6 @@ export const LoginPage = () => {
 							</Form>
 						)}
 					</Formik>
-					<Notice tone="info" role="note" className="mt-5">
-						Aquí no se pide ninguna Clave SOL. Las credenciales de las cuentas SUNAT las gestiona el administrador.
-					</Notice>
 					<p className="mt-4 text-sm text-muted-ink">¿Olvidó su contraseña de buzon-sol? Contacte al administrador.</p>
 				</div>
 				<PrototypeUsers />

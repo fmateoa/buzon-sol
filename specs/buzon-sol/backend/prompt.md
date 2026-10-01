@@ -78,6 +78,6 @@ Las tablas de buzón usan `sunat_account_id` e índices que faciliten búsquedas
 
 ## 7. Relación con el plan de backend
 
-El [plan de backend](../plan/backend.md) define sus hitos y criterios de cierre. El [plan de integración SUNAT](../plan/sunat-integration.md) valida login, sesión y servicios remotos antes de habilitarlos; este archivo aporta el stack y las pautas técnicas. El [plan de frontend](../plan/frontend.md) avanza por separado. La conexión entre frontend y backend se definirá posteriormente.
+El [plan de backend](../plan/01-backend.md) define sus hitos y criterios de cierre. El [plan de integración SUNAT](../plan/02-sunat-integration.md) valida login, sesión y servicios remotos antes de habilitarlos; este archivo aporta el stack y las pautas técnicas. El [plan de frontend](../plan/03-frontend.md) avanza por separado. La conexión entre frontend y backend se definirá posteriormente.
 
 Documenta decisiones que cambien lo aquí definido y enlaza cada contrato SUNAT utilizado con su evidencia en las specs. No agregues funciones de mover, destacar, marcar urgente o «marcar como no leído» hasta que exista un caso de uso y un comportamiento remoto verificado.

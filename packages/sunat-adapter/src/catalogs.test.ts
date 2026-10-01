@@ -25,6 +25,17 @@ test("labels are read from visor HTML without executing it and keep unknown code
     { code: "10", name: "ETIQUETA FICTICIA A", color: "#ce0d0e", messageCount: 3 },
     { code: "99", name: "ETIQUETA [NUEVA] FICTICIA", color: "#00afff", messageCount: 0 },
   ]);
+  // Embedding observed in S-11: a single-quoted JSON string handed to $.parseJSON, with JavaScript escapes.
+  const observed = String.raw`<script>var listEtiquetas = $.parseJSON('[{"codEtiqueta":"16","descEtiqueta":"AVISOS","colorEtiqueta":"#d45aed","cantEtiqueta":0},{"codEtiqueta":"21","descEtiqueta":"L\'ETIQUETA \\"X\\"","colorEtiqueta":null,"cantEtiqueta":2}]');</script>`;
+  assert.deepEqual(parseLabels({ contentType: "text/html", body: observed }), [
+    { code: "16", name: "AVISOS", color: "#d45aed", messageCount: 0 },
+    { code: "21", name: "L'ETIQUETA \"X\"", color: null, messageCount: 2 },
+  ]);
+  // Color sin «#» o en mayúsculas se normaliza; algo que no es hexadecimal queda sin color.
+  const odd = `<script>var listEtiquetas = [{"codEtiqueta":"10","descEtiqueta":"A","colorEtiqueta":"CE0D0E","cantEtiqueta":0},{"codEtiqueta":"11","descEtiqueta":"B","colorEtiqueta":"red","cantEtiqueta":0}];</script>`;
+  assert.deepEqual(parseLabels({ contentType: "text/html", body: odd }).map((l) => l.color), ["#ce0d0e", null]);
+  assert.throws(() => parseLabels({ contentType: "text/html", body: "<script>var listEtiquetas = $.parseJSON('not json');</script>" }),
+    isCode("schema_changed"));
   assert.throws(() => parseLabels({ contentType: "text/html", body: "<html><script>var x = 1;</script></html>" }), isCode("schema_changed"));
   assert.throws(() => parseLabels({ contentType: "text/html", body: "<script>var listEtiquetas = [{codEtiqueta:'10'}];</script>" }),
     isCode("schema_changed"));

@@ -18,6 +18,7 @@ const COPY: Record<AppErrorCode, ErrorCopy> = {
 	incomplete_inventory: { title: "Inventario parcial", body: "Los filtros solo incluyen lo ya inventariado." },
 	conflict_running: { title: "Ya hay una consulta en curso", body: "Espere a que termine la consulta actual de esta cuenta." },
 	validation: { title: "Revise los datos", body: "Algunos campos no son válidos." },
+	pending_integration: { title: "Aún no disponible", body: "Esta función se habilitará cuando el buzón quede conectado al servidor y validado con SUNAT." },
 };
 
 export const errorCopy = (error: unknown): ErrorCopy => {

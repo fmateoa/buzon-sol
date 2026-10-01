@@ -38,6 +38,11 @@ const FileRow = ({ file, canDownload, blockedReason, onDownload }: { file: MailF
 						<span className="mono text-xs text-muted-ink">{s.progress} %</span>
 					</div>
 				)}
+				{s.status === "stored" && canDownload && (
+					<Button size="sm" variant="bordered" onClick={() => onDownload(file.id)} aria-label={`Guardar una copia de ${file.name} en este equipo`} className="min-h-10">
+						Guardar copia
+					</Button>
+				)}
 				{(s.status === "available" || s.status === "failed") && canDownload && (
 					<Button size="sm" variant="bordered" disabled={Boolean(blockedReason)} onClick={() => onDownload(file.id)} aria-label={`${s.status === "failed" ? "Reintentar descarga de" : "Descargar"} ${file.name}`} className="min-h-10">
 						{s.status === "failed" ? "Reintentar" : "Descargar"}

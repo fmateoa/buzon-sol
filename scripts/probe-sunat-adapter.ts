@@ -1,6 +1,6 @@
 /** Reads one authorized test credential from stdin; emits only redacted verdicts. */
 import { createHash } from "node:crypto";
-import { parseInventoryPage, scanBox, SunatHttpSession } from "../packages/sunat-adapter/src/index.js";
+import { parseAlerts, parseFolders, parseInventoryPage, parseLabels, scanBox, SunatHttpSession } from "../packages/sunat-adapter/src/index.js";
 
 type Credential = { ruc: string; solUser: string; password: string };
 const mode = process.argv[2] ?? "--connection";
@@ -169,11 +169,11 @@ async function probe(credential: Credential): Promise<object> {
     const session = await SunatHttpSession.open(credential);
     try {
       const result: Record<string, object> = {};
-      try { result.folders = { count: (await session.listFolders()).length }; }
+      try { result.folders = { count: parseFolders(await session.listFolders()).length }; }
       catch (error) { result.folders = { error: error instanceof Error && "code" in error ? error.code : "probe_failed" }; }
-      try { result.labels = { count: session.listLabels().length }; }
+      try { result.labels = { count: parseLabels(await session.visorHtml()).length }; }
       catch (error) { result.labels = { error: error instanceof Error && "code" in error ? error.code : "probe_failed" }; }
-      try { result.alerts = { count: (await session.consultAlerts()).length }; }
+      try { result.alerts = { count: parseAlerts(await session.consultAlerts()).alerts.length }; }
       catch (error) { result.alerts = { error: error instanceof Error && "code" in error ? error.code : "probe_failed" }; }
       return result;
     } finally { await session.close(); }
@@ -489,19 +489,19 @@ async function probe(credential: Credential): Promise<object> {
   if (mode === "--label-check") {
     const session = await SunatHttpSession.open(credential);
     try {
-      const labels = session.listLabels();
+      const labels = parseLabels(await session.visorHtml());
       const result = [];
       for (const label of labels.slice(0, 12)) {
         const rows: string[] = [];
         let error: string | null = null;
         try {
           for (let page = 1; page <= 50; page++) {
-            const current = parseInventoryPage(await session.listPage("messages", page, { codEtiqueta: label.codEtiqueta }), "any");
+            const current = parseInventoryPage(await session.listPage("messages", page, { codEtiqueta: label.code }), "any");
             if (current.rows.length === 0) break;
             rows.push(...current.rows.map((row) => `${row.indTipmsj ?? ""}:${row.codMensaje}`));
           }
         } catch (caught) { error = caught instanceof Error && "code" in caught ? String(caught.code) : "probe_failed"; }
-        result.push({ declared: label.cantEtiqueta, returned: rows.length, uniqueReturned: new Set(rows).size,
+        result.push({ declared: label.messageCount, returned: rows.length, uniqueReturned: new Set(rows).size,
           messages: rows.filter((id) => id.startsWith("1:")).length, notifications: rows.filter((id) => id.startsWith("2:")).length, error });
       }
       return { labelsQueried: result.length, labels: result };
@@ -522,7 +522,7 @@ async function probe(credential: Credential): Promise<object> {
         result.push({ box, rows: rows.length,
           fields: Object.fromEntries([...types].sort().map(([key, set]) => [key, [...set].sort().join("|")])) });
       }
-      return { listSchema: result, labels: session.listLabels().length >= 0 };
+      return { listSchema: result, labels: parseLabels(await session.visorHtml()).length >= 0 };
     } finally { await session.close(); }
   }
   if (mode === "--capacity-check") {

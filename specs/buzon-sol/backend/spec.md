@@ -60,7 +60,7 @@ La UI ofrece «Consultar ahora» y «Reanudar» pero el trabajo real es asíncro
 
 ## 6. Puertas de validación con SUNAT
 
-El procedimiento completo, la matriz de servicios y el criterio de liberación están en el [plan independiente de integración SUNAT](../plan/sunat-integration.md). Las puertas siguientes expresan la dependencia del producto; no sustituyen sus pruebas S-01–S-20.
+El procedimiento completo, la matriz de servicios y el criterio de liberación están en el [plan independiente de integración SUNAT](../plan/02-sunat-integration.md). Las puertas siguientes expresan la dependencia del producto; no sustituyen sus pruebas S-01–S-20.
 
 | ID | Prueba controlada | Condición para habilitar |
 |---|---|---|

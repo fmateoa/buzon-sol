@@ -1,6 +1,6 @@
 # buzon-sol · frontend (v2)
 
-Implementación de los hitos FE-0 a FE-5 del [plan frontend](../../specs/buzon-sol/plan/frontend.md) con **datos ficticios** y un **adaptador local tipado**. No hay API, worker ni conexión con SUNAT: el navegador nunca habla con SUNAT.
+Implementación de los hitos FE-0 a FE-5 del [plan frontend](../../specs/buzon-sol/plan/03-frontend.md) con **datos ficticios** y un **adaptador local tipado**. No hay API, worker ni conexión con SUNAT: el navegador nunca habla con SUNAT.
 
 ## Comandos
 
@@ -8,10 +8,11 @@ Desde la raíz del monorepo (pnpm):
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
+pnpm dev            # http://localhost:5173, contra la API (ver «Modo backend»)
+pnpm dev:prototype  # datos ficticios, sin backend
 pnpm typecheck    # tsc -b --noEmit
 pnpm lint         # eslint
-pnpm test         # vitest (51 pruebas)
+pnpm test         # vitest (59 pruebas)
 pnpm build        # tsc -b && vite build
 ```
 
@@ -52,6 +53,7 @@ Reglas que el adaptador local cumple y que el backend deberá garantizar:
 - La Clave SOL solo se escribe/reemplaza; ninguna respuesta, auditoría ni CSV la contiene. El RUC sale enmascarado.
 - «Total verificado» solo tras un barrido completo; el declarado por SUNAT es secundario (fixture: 3 328 únicos frente a 2 681 declarados).
 - Los cambios de rol/acceso aplican a sesiones abiertas (la sesión se revalida cada 30 s y tras cada comando administrativo).
+- `touchSession()` registra uso real (teclado, clic, scroll) para renovar la ventana de inactividad de la sesión de la app (`session.idleMinutes`, ver Configuraciones). Lo llama solo `SessionActivity` (`features/session/guards.tsx`), montado únicamente con sesión y con un máximo de un aviso por minuto, alineado con el umbral del servidor. Los sondeos (`getSession` cada 30 s, actividad programada) **nunca** lo llaman. No devuelve `CommandResult` a propósito: es un aviso sin interfaz, sus errores se ignoran y el `401` lo gestiona el flujo normal de sesión vencida (`getSession` → login).
 
 Las claves de caché cuelgan de `["account", accountId]`: una respuesta tardía de la cuenta A no puede escribir en la vista de B, y la guarda de cuenta desmonta la vista (`<Outlet key={accountId}>`) al cambiar de cuenta.
 
@@ -100,4 +102,16 @@ Notas de integración con lizaui 12.0.10 (verificadas contra los `.d.ts` y el c�
 
 ## Pendiente para la integración con la API
 
-Sin inventar endpoints, el backend deberá acordar: autenticación de la app y renovación de sesión; forma de las páginas de metadatos y cobertura por bandeja; canal de progreso de barridos (hoy sondeo cada 1–2 s); confirmación asíncrona del estado remoto tras `readContent`; entrega de archivos guardados (URL firmada o flujo) y cancelación de descargas; avisos en app (P-01, P-02); exportación de auditoría (formato y límites); retención (P-04). Al conectar, sustituir `new LocalAdapter()` en `main.tsx` por el cliente real que implemente `BuzonAdapter`.
+Sin inventar endpoints, el backend deberá acordar: autenticación de la app y renovación de sesión; forma de las páginas de metadatos y cobertura por bandeja; canal de progreso de barridos (hoy sondeo cada 1–2 s); confirmación asíncrona del estado remoto tras `readContent`; entrega de archivos guardados (URL firmada o flujo) y cancelación de descargas; avisos en app (P-01, P-02); exportación de auditoría (formato y límites); retención (P-04). Esos puntos corresponden a INT-2 del [plan de integración](../../specs/buzon-sol/plan/04-integration.md).
+
+## Modo backend (INT-1: gestión)
+
+`pnpm dev` lee `.env` (`VITE_DATA_SOURCE=backend`) y usa `HttpAdapter` (`src/adapters/http`) en lugar de `LocalAdapter`; `main.tsx` elige según `VITE_DATA_SOURCE`. `pnpm dev:prototype` (modo `prototype`, `.env.prototype`) vuelve a los datos ficticios, y las pruebas siempre usan el adaptador local. El servidor de desarrollo reenvía `/api` a `BUZON_API_URL` (por defecto `http://127.0.0.1:38080`).
+
+- Conectado: sesión, preferencia de aviso, usuarios, roles, cuentas SUNAT, credencial, programador (sin activarlo) y auditoría.
+- «Probar conexión…» encola la prueba en la API y espera el resultado del worker (requiere `SUNAT_CONNECTION_CLIENT_READY` en API y worker).
+- Buzón conectado: resumen, bandejas, etiquetas, detalle, actividad, inventario (una cuenta o todas), lectura explícita, descargas, revisión local y archivo de la cuenta. Los comandos se encolan en la API y el adaptador espera el resultado del worker; con la puerta `SUNAT_*` cerrada la API responde `remote_unavailable` («SUNAT no respondió»).
+- `listFolders` devuelve vacío en modo servidor: la pertenencia de cada elemento a una carpeta no está validada con SUNAT (S-10).
+- Pantallas nuevas: pestaña **Archivo** en la cuenta (administración), sección **Archivo del buzón** en Actividad, **Consultar todas las cuentas** en Actividad programada y **Guardar copia** en archivos ya guardados.
+- El token de sesión vive solo en memoria: recargar la página exige ingresar de nuevo.
+- El alta de usuario pide una contraseña inicial (`userOnboarding = "initial_password"`); el prototipo conserva la invitación.

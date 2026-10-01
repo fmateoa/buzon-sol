@@ -89,7 +89,9 @@ const RecentRuns = ({ accountId }: { accountId: AccountId }) => {
 	return (
 		<div className="flex flex-col gap-2">
 			<ColumnLabel>Últimas consultas</ColumnLabel>
-			{runs.length === 0 ? (
+			{activity.isError ? (
+				<p className="text-sm text-muted-ink">{errorCopy(activity.error).title}.</p>
+			) : runs.length === 0 ? (
 				<p className="text-sm text-muted-ink">Aún no hay consultas.</p>
 			) : (
 				<ul className="divide-y divide-line-soft overflow-hidden rounded-lg border border-line bg-paper">

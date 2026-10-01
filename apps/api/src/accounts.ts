@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError, encryptForWorker } from "@buzon-sol/domain";
+import { RUN_STATUS_COLUMNS, RUN_STATUS_JOINS } from "./run-status";
 import { AuthService, DB, type Principal } from "./auth";
 import { validId } from "./identity";
 
@@ -35,9 +36,27 @@ export class AccountsService {
   async list(actor: Principal) {
     this.auth.requirePermission(actor, "manage_accounts");
     return this.db.query(`SELECT a.id,a.alias,a.ruc_masked AS rucMasked,
-      a.sol_user_masked AS solUserMasked,a.active,
-      (SELECT c.status FROM sunat_credentials c WHERE c.account_id=a.id ORDER BY c.version DESC LIMIT 1) AS credentialStatus
-      FROM sunat_accounts a ORDER BY a.alias`);
+      a.sol_user_masked AS solUserMasked,a.active,a.created_at AS createdAt,
+      (SELECT c.status FROM sunat_credentials c WHERE c.account_id=a.id ORDER BY c.version DESC LIMIT 1) AS credentialStatus,
+      (SELECT c.replaced_at FROM sunat_credentials c WHERE c.account_id=a.id ORDER BY c.version DESC LIMIT 1) AS credentialSavedAt,
+      COALESCE(s.state,'disabled') AS scheduleState,s.pause_reason AS pauseReason,s.next_run_at AS nextRunAt,
+      ${RUN_STATUS_COLUMNS},
+      (SELECT COUNT(*) FROM app_users u JOIN roles r ON r.id=u.role_id WHERE u.status<>'disabled' AND (r.all_accounts OR EXISTS
+        (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=a.id))) AS userCount
+      FROM sunat_accounts a LEFT JOIN sync_schedules s ON s.account_id=a.id ${RUN_STATUS_JOINS} ORDER BY a.alias`);
+  }
+
+  /** Users whose role reaches the account; the admin sees who is affected before changing it. */
+  async users(actor: Principal, accountId: string) {
+    this.auth.requirePermission(actor, "manage_accounts");
+    validId(accountId);
+    return this.db.query(
+      `SELECT u.id,u.email,u.name,u.status,u.role_id AS roleId,r.name AS roleName,
+         (SELECT MAX(s.created_at) FROM app_sessions s WHERE s.user_id=u.id) AS lastLoginAt
+       FROM app_users u JOIN roles r ON r.id=u.role_id
+       WHERE r.all_accounts OR EXISTS
+         (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=?)
+       ORDER BY u.name`, [accountId]);
   }
 
   async create(actor: Principal, input: AccountInput): Promise<{ id: string }> {
@@ -71,13 +90,16 @@ export class AccountsService {
     this.auth.requirePermission(actor, "manage_accounts");
     validId(accountId);
     const alias = requiredText(input.alias, 160);
-    const solUser = requiredText(input.solUser, 100);
+    // The SOL user is write-only: omitting it keeps the stored one.
+    const solUser = input.solUser === undefined || input.solUser === "" ? null : requiredText(input.solUser, 100);
     const { pem, keyId } = publicKey();
     await this.db.transaction(async (manager) => {
-      const result = await manager.query(
-        "UPDATE sunat_accounts SET alias=?,sol_user_ciphertext=?,sol_user_masked=? WHERE id=?",
-        [alias, encryptForWorker(solUser, pem, keyId), `${solUser.slice(0, 2)}***`, accountId],
-      );
+      const result = solUser === null
+        ? await manager.query("UPDATE sunat_accounts SET alias=? WHERE id=?", [alias, accountId])
+        : await manager.query(
+          "UPDATE sunat_accounts SET alias=?,sol_user_ciphertext=?,sol_user_masked=? WHERE id=?",
+          [alias, encryptForWorker(solUser, pem, keyId), `${solUser.slice(0, 2)}***`, accountId],
+        );
       if (!result.affectedRows) throw new AppError("not_found");
       await manager.query(
         "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",

@@ -9,10 +9,11 @@ import { ConnectionBadge } from "@/components/custom/status";
 import { UnderlineTabsList, UnderlineTabsTrigger } from "@/components/custom/underline-tabs";
 import { formatRelative } from "@/lib/format";
 import { AccountActiveControl, AccountForm, TestConnectionControl } from "./account-form";
+import { ArchiveSettings } from "./archive-settings";
 import { useAccountUsers, useAdminAccount } from "./queries";
 import { ScheduleEditor } from "./schedule-form";
 
-const TABS = ["datos", "programador", "usuarios"] as const;
+const TABS = ["datos", "programador", "archivo", "usuarios"] as const;
 type Tab = (typeof TABS)[number];
 
 const AccountUsers = ({ accountId }: { accountId: AccountId }) => {
@@ -69,10 +70,12 @@ export const AccountAdminDetailPage = () => {
 				}
 			/>
 			<Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="gap-0">
-				<div className="flex flex-col-reverse gap-3 border-b border-line-soft sm:flex-row sm:items-end sm:justify-between">
+				{/* Altura fija en escritorio (botones de 40 px + 10 px): con o sin las acciones del programador la cabecera no cambia de alto. */}
+				<div className="flex flex-col-reverse gap-3 border-b border-line-soft sm:min-h-[3.125rem] sm:flex-row sm:items-end sm:justify-between">
 					<UnderlineTabsList aria-label="Secciones de la cuenta" className="overflow-x-auto">
 						<UnderlineTabsTrigger value="datos">Datos y credencial</UnderlineTabsTrigger>
 						<UnderlineTabsTrigger value="programador">Programador</UnderlineTabsTrigger>
+						<UnderlineTabsTrigger value="archivo">Archivo</UnderlineTabsTrigger>
 						<UnderlineTabsTrigger value="usuarios">Usuarios con acceso</UnderlineTabsTrigger>
 					</UnderlineTabsList>
 					<div ref={setActionsSlot} className="flex flex-wrap gap-2 empty:hidden sm:pb-2.5" />
@@ -93,6 +96,9 @@ export const AccountAdminDetailPage = () => {
 				</TabsContent>
 				<TabsContent value="programador" className="mt-4">
 					<ScheduleEditor accountId={a.id} actionsSlot={actionsSlot} />
+				</TabsContent>
+				<TabsContent value="archivo" className="mt-4">
+					<ArchiveSettings accountId={a.id} />
 				</TabsContent>
 				<TabsContent value="usuarios" className="mt-4">
 					<AccountUsers accountId={a.id} />

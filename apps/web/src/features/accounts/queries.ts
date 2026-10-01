@@ -56,6 +56,29 @@ export const useStartInventory = (accountId: AccountId) => {
 	});
 };
 
+/** Avance del archivo de la cuenta; se refresca mientras hay un lote en cola o en curso. */
+export const useArchiveStatus = (accountId: AccountId) => {
+	const adapter = useAdapter();
+	return useQuery({
+		queryKey: qk.archive(accountId),
+		queryFn: () => adapter.getArchiveStatus(accountId),
+		refetchInterval: (query) => (query.state.data?.current?.state === "running" || query.state.data?.current?.state === "pending" ? 3000 : false),
+	});
+};
+
+export const useStartArchive = (accountId: AccountId) => {
+	const adapter = useAdapter();
+	const invalidate = useInvalidateAccount();
+	return useMutation({
+		mutationFn: async (retryFailed: boolean) => {
+			const result = await adapter.startArchive(accountId, retryFailed);
+			if (!result.ok) throw result.error;
+			return result.data;
+		},
+		onSettled: () => invalidate(accountId),
+	});
+};
+
 export const useResumeRun = (accountId: AccountId) => {
 	const adapter = useAdapter();
 	const invalidate = useInvalidateAccount();

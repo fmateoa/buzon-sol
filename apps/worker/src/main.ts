@@ -1,19 +1,19 @@
-<<<<<<< HEAD
-import { Queue } from "bullmq";
-import { DataSource } from "typeorm";
-import { INVENTORY_QUEUE, logEvent, redisOptions, type InventoryJob } from "@buzon-sol/domain";
+import { Queue, type Worker } from "bullmq";
+import { SunatHttpSession } from "@buzon-sol/sunat-adapter";
+import { ARCHIVE_QUEUE, INVENTORY_QUEUE, logEvent, redisOptions, type ArchiveJob, type InventoryJob } from "@buzon-sol/domain";
+import { recoverOrphanArchiveRuns } from "./archive.js";
+import { startArchiveWorker } from "./archive-queue.js";
+import { startConnectionWorker } from "./connection-queue.js";
+import { loadSolCredential } from "./credentials.js";
+import { workerDataSource } from "./data-source.js";
+import { startFileWorker } from "./file-queue.js";
+import { startInventoryWorker } from "./queue.js";
+import { startReadWorker } from "./read-queue.js";
 import { recoverOrphanRuns } from "./recovery.js";
 import { dispatchDueSchedules } from "./scheduler.js";
+import { SunatFileClient } from "./sunat-file-client.js";
 
-/** The schema is owned by the API migrations; the worker never synchronizes or migrates. */
-export function workerDataSource(): DataSource {
-  return new DataSource({
-    type: "mysql", host: process.env.DB_HOST ?? "127.0.0.1", port: Number(process.env.DB_PORT ?? 3306),
-    username: process.env.DB_USER ?? "buzon", password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME ?? "buzon_sol", charset: "utf8mb4", timezone: "Z",
-    synchronize: false, migrationsRun: false,
-  });
-}
+const gate = (name: string): boolean => process.env[name] === "true";
 
 function interval(name: string, fallback: number): number {
   const value = Number(process.env[name] ?? fallback);
@@ -35,128 +35,84 @@ function every(ms: number, task: () => Promise<void>): () => void {
   return () => clearInterval(timer);
 }
 
-/**
- * Worker process boundary. Maintenance runs always; the scheduler loop only after the unattended-cron gate;
- * SUNAT job consumers only once validated clients exist (none yet: transport NO_VALIDADO).
- */
-=======
-import { SunatHttpSession } from "@buzon-sol/sunat-adapter";
-import { Queue } from "bullmq";
-import { INVENTORY_QUEUE, redisApiOptions, type InventoryJob } from "@buzon-sol/domain";
-import { loadSolCredential } from "./credentials.js";
-import { workerDataSource } from "./data-source.js";
-import { startConnectionWorker } from "./connection-queue.js";
-import { startInventoryWorker } from "./queue.js";
-import { startReadWorker } from "./read-queue.js";
-import { startFileWorker } from "./file-queue.js";
-import { SunatFileClient } from "./sunat-file-client.js";
-import { dispatchDueSchedules } from "./scheduler.js";
-
-/** Connection tests can run independently; inventory remains gated by phase A. */
->>>>>>> 46cdc85e8eb7b709969c3920163453507626d844
-export async function main(): Promise<void> {
-  if (process.env.ENABLE_SUNAT_JOBS !== "true") {
-    process.stdout.write("Worker idle: SUNAT jobs disabled\n");
-    await waitForStop();
-    return;
-  }
-<<<<<<< HEAD
-  const recoveryMs = interval("RECOVERY_INTERVAL_MS", 300_000);
-  const schedulerMs = interval("SCHEDULER_INTERVAL_MS", 60_000);
-  const db = await workerDataSource().initialize();
-  const queue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisOptions() });
-  const stops = [every(recoveryMs, async () => {
-    try {
-      const recovered = await recoverOrphanRuns(db, async (runId) => Boolean(await queue.getJob(runId)));
-      if (recovered) logEvent("warn", "orphan_runs_recovered", { recovered });
-    } catch {
-      logEvent("error", "orphan_recovery_failed");
-    }
-  })];
-  if (process.env.SUNAT_CRON_VALIDATED === "true") {
-    stops.push(every(schedulerMs, async () => {
-      try {
-        const dispatched = await dispatchDueSchedules(db, async (accountId, runId) => {
-          await queue.add("inventory", { accountId, runId }, { jobId: runId, attempts: 1, removeOnComplete: true, removeOnFail: true });
-        });
-        if (dispatched) logEvent("info", "schedules_dispatched", { dispatched });
-      } catch {
-        logEvent("error", "scheduler_pass_failed");
-      }
-    }));
-  }
-  logEvent("info", "worker_started", { sunatJobs: false, scheduler: process.env.SUNAT_CRON_VALIDATED === "true" });
-  await new Promise<void>((resolve) => {
-=======
-  if (process.env.SUNAT_CONNECTION_CLIENT_READY !== "true" &&
-      process.env.SUNAT_TRANSPORT_VALIDATED !== "true") {
-    throw new Error("SUNAT jobs need an explicitly validated capability");
-  }
-  if (process.env.SUNAT_CRON_VALIDATED === "true" && process.env.SUNAT_TRANSPORT_VALIDATED !== "true") {
-    throw new Error("SUNAT cron requires validated inventory transport");
-  }
-  if (process.env.SUNAT_READ_VALIDATED === "true" && process.env.SUNAT_TRANSPORT_VALIDATED !== "true") {
-    throw new Error("SUNAT reading requires validated inventory transport");
-  }
-  if (process.env.SUNAT_FILE_CLIENT_READY === "true" &&
-      (process.env.SUNAT_READ_VALIDATED !== "true" || process.env.SUNAT_TRANSPORT_VALIDATED !== "true")) {
-    throw new Error("SUNAT files require validated reading and inventory");
-  }
-  await workerDataSource.initialize();
-  const workers = [];
-  let stopScheduler: (() => Promise<void>) | undefined;
-  try {
-    if (process.env.SUNAT_CONNECTION_CLIENT_READY === "true") {
-      workers.push(startConnectionWorker(workerDataSource, (credential) => SunatHttpSession.open(credential)));
-    }
-    if (process.env.SUNAT_TRANSPORT_VALIDATED === "true") {
-      workers.push(startInventoryWorker(workerDataSource, async (accountId) =>
-        SunatHttpSession.open(await loadSolCredential(workerDataSource, accountId))));
-    }
-    if (process.env.SUNAT_READ_VALIDATED === "true") {
-      workers.push(startReadWorker(workerDataSource, async (accountId) =>
-        SunatHttpSession.open(await loadSolCredential(workerDataSource, accountId))));
-    }
-    if (process.env.SUNAT_FILE_CLIENT_READY === "true") {
-      workers.push(startFileWorker(workerDataSource, async (accountId) =>
-        new SunatFileClient(workerDataSource,
-          await SunatHttpSession.open(await loadSolCredential(workerDataSource, accountId)))));
-    }
-    if (process.env.SUNAT_CRON_VALIDATED === "true") stopScheduler = startScheduler();
-    process.stdout.write("SUNAT worker ready\n");
-    await waitForStop();
-  } finally {
-    await stopScheduler?.();
-    await Promise.allSettled(workers.map((worker) => worker.close()));
-    await workerDataSource.destroy();
-  }
-}
-
-function startScheduler(): () => Promise<void> {
-  const queue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisApiOptions() });
-  let active: Promise<void> | undefined;
-  const tick = () => {
-    if (active) return;
-    active = dispatchDueSchedules(workerDataSource, async (accountId, runId) => {
-      await queue.add("inventory", { accountId, runId },
-        { jobId: runId, attempts: 1, removeOnComplete: true, removeOnFail: true });
-    }).then(() => {}, () => { process.stderr.write("SUNAT scheduler pass failed\n"); })
-      .finally(() => { active = undefined; });
-  };
-  tick();
-  const interval = setInterval(tick, 30_000);
-  return async () => { clearInterval(interval); await active; await queue.close(); };
-}
-
 function waitForStop(): Promise<void> {
   return new Promise((resolve) => {
->>>>>>> 46cdc85e8eb7b709969c3920163453507626d844
     process.once("SIGINT", resolve);
     process.once("SIGTERM", resolve);
   });
-  for (const stop of stops) stop();
-  await queue.close();
-  await db.destroy();
 }
 
-if (process.argv[1]?.endsWith("main.ts")) void main();
+/**
+ * Worker process boundary. Each SUNAT capability has its own gate and none is on by default: connection tests,
+ * inventory, explicit reads plus the per-account archive, file downloads and the scheduler loop. Every job opens
+ * its own session for one account and closes it; no cookie jar outlives a job. Maintenance runs with any gate.
+ */
+export async function main(): Promise<void> {
+  if (!gate("ENABLE_SUNAT_JOBS")) {
+    logEvent("info", "worker_idle");
+    await waitForStop();
+    return;
+  }
+  const transport = gate("SUNAT_TRANSPORT_VALIDATED"), reading = gate("SUNAT_READ_VALIDATED");
+  const connection = gate("SUNAT_CONNECTION_CLIENT_READY"), files = gate("SUNAT_FILE_CLIENT_READY");
+  const cron = gate("SUNAT_CRON_VALIDATED");
+  if (!connection && !transport) throw new Error("SUNAT jobs need an explicitly validated capability");
+  if (cron && !transport) throw new Error("SUNAT cron requires validated inventory transport");
+  if (reading && !transport) throw new Error("SUNAT reading requires validated inventory transport");
+  if (files && (!reading || !transport)) throw new Error("SUNAT files require validated reading and inventory");
+  const recoveryMs = interval("RECOVERY_INTERVAL_MS", 300_000);
+  const schedulerMs = interval("SCHEDULER_INTERVAL_MS", 60_000);
+
+  const db = await workerDataSource().initialize();
+  const inventoryQueue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisOptions() });
+  const archiveQueue = new Queue<ArchiveJob>(ARCHIVE_QUEUE, { connection: redisOptions() });
+  const session = async (accountId: string) => SunatHttpSession.open(await loadSolCredential(db, accountId));
+  const workers: Worker[] = [];
+  const stops: (() => void)[] = [];
+  try {
+    if (connection) workers.push(startConnectionWorker(db, (credential) => SunatHttpSession.open(credential)));
+    if (transport) workers.push(startInventoryWorker(db, session));
+    if (reading) workers.push(startReadWorker(db, session), startArchiveWorker(db, session));
+    if (files) workers.push(startFileWorker(db, async (accountId) => new SunatFileClient(db, await session(accountId))));
+    // Job failures are recorded by each processor; this only keeps a queue connection error from ending the process.
+    for (const worker of workers) worker.on("error", () => logEvent("error", "queue_worker_error", { queue: worker.name }));
+
+    stops.push(every(recoveryMs, async () => {
+      try {
+        const recovered = await recoverOrphanRuns(db, async (runId) => Boolean(await inventoryQueue.getJob(runId)));
+        const archives = await recoverOrphanArchiveRuns(db, async (runId) => Boolean(await archiveQueue.getJob(runId)));
+        if (recovered || archives) logEvent("warn", "orphan_runs_recovered", { recovered, archives });
+      } catch {
+        logEvent("error", "orphan_recovery_failed");
+      }
+    }));
+    if (cron) {
+      stops.push(every(schedulerMs, async () => {
+        try {
+          const dispatched = await dispatchDueSchedules(db, async (accountId, runId) => {
+            await inventoryQueue.add("inventory", { accountId, runId },
+              { jobId: runId, attempts: 1, removeOnComplete: true, removeOnFail: true });
+          });
+          if (dispatched) logEvent("info", "schedules_dispatched", { dispatched });
+        } catch {
+          logEvent("error", "scheduler_pass_failed");
+        }
+      }));
+    }
+    logEvent("info", "worker_started", { connection, inventory: transport, reading, archive: reading, files, scheduler: cron });
+    await waitForStop();
+  } finally {
+    for (const stop of stops) stop();
+    await Promise.allSettled(workers.map((worker) => worker.close()));
+    await Promise.allSettled([inventoryQueue.close(), archiveQueue.close()]);
+    await db.destroy();
+  }
+}
+
+if (process.argv[1]?.endsWith("main.ts")) {
+  main().catch((error) => {
+    // Configuration errors carry no secrets; anything else is reported without its message.
+    logEvent("error", "worker_stopped", { reason: error instanceof Error && /^(SUNAT |Invalid )/.test(error.message) ? error.message : "unexpected" });
+    process.exitCode = 1;
+  });
+}

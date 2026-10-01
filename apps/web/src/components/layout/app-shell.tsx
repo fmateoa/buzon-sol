@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "lizaui/button";
-import { LogOut, Menu, Moon, Sun } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LogOut, Mail, Menu, Moon, Sun } from "lucide-react";
 import type { AccountId, MailBox } from "@/domain/types";
 import { cn } from "@/lib/cn";
 import { can } from "@/lib/permissions";
@@ -119,41 +120,43 @@ const ConnectionCard = ({ accountId }: { accountId: AccountId }) => {
 	);
 };
 
-const Sidebar = ({ accountId, box, variant }: { accountId: AccountId | null; box: MailBox | null; variant: "full" | "rail" }) => {
+/** Barra principal: módulos del sistema, administración y datos personales. */
+const MainSidebar = ({ accountId, inMailbox, variant, onToggle }: { accountId: AccountId | null; inMailbox: boolean; variant: "full" | "rail"; onToggle?: (() => void) | undefined }) => {
 	const session = useAppSession();
 	const logout = useLogout();
-	const counts = useUnreadCounts(accountId);
 	const admin = adminNav.filter((i) => !i.permission || can(session, i.permission));
 	const full = variant === "full";
+	const mailboxItem: NavItem = { key: "buzon", label: "Buzón SUNAT", icon: Mail, to: accountId ? `/c/${accountId}/resumen` : "/" };
 
 	return (
 		<nav aria-label="Navegación principal" className={cn("flex h-full flex-col gap-5 overflow-y-auto border-r border-line bg-surface", full ? "w-[232px] px-3.5 py-5" : "w-[76px] items-center px-2 py-4")}>
-			<Link to="/" className={cn("flex items-center gap-2.5", full ? "px-2" : "justify-center")} aria-label="buzon-sol, inicio">
-				<span aria-hidden="true" className="size-[22px] shrink-0 rounded-[5px] bg-brand-fill" />
-				{full && <span className="text-base font-bold tracking-tight text-ink">buzon-sol</span>}
-			</Link>
-
-			{session.visibleAccounts.length > 0 && (
-				<div className="flex flex-col gap-1">
-					{full && <SectionLabel>Cuenta SUNAT</SectionLabel>}
-					<AccountSelector activeId={accountId} compact={!full} />
-				</div>
-			)}
-
-			{accountId && (
-				<div className="flex flex-col gap-0.5">
-					{accountNav(accountId).map((item) => (
-						<NavEntry key={item.key} item={item} variant={variant} count={item.count && counts ? counts[item.count] : undefined} />
-					))}
-				</div>
-			)}
-
-			{full && accountId && box && <FolderAndTagLinks accountId={accountId} box={box} />}
+			<div className={cn("flex items-center", full ? "justify-between" : "flex-col gap-2")}>
+				<Link to="/" className={cn("flex items-center gap-2.5", full ? "px-2" : "justify-center")} aria-label="buzon-sol, inicio">
+					<span aria-hidden="true" className="size-[22px] shrink-0 rounded-[5px] bg-brand-fill" />
+					{full && <span className="text-base font-bold tracking-tight text-ink">buzon-sol</span>}
+				</Link>
+				{onToggle && (
+					<Button size="sm" variant="light" isIconOnly aria-label={full ? "Contraer barra lateral" : "Expandir barra lateral"} onClick={onToggle} className="size-8 min-w-8">
+						{full ? <ChevronsLeft className="size-4" aria-hidden="true" /> : <ChevronsRight className="size-4" aria-hidden="true" />}
+					</Button>
+				)}
+			</div>
 
 			<div className="flex flex-col gap-0.5">
-				{personalNav.map((item) => (
-					<NavEntry key={item.key} item={item} variant={variant} />
-				))}
+				{full && <SectionLabel>Módulos</SectionLabel>}
+				<NavLink
+					to={mailboxItem.to}
+					className={cn(
+						"flex items-center rounded-md text-sm transition-colors",
+						full ? "min-h-10 gap-2.5 px-2.5 py-2" : "size-11 justify-center",
+						inMailbox ? "bg-paper font-semibold text-brand shadow-[inset_0_0_0_1px_var(--bz-brand-line)]" : "text-ink-2 hover:bg-paper/70",
+					)}
+					aria-label={full ? undefined : mailboxItem.label}
+					aria-current={inMailbox ? "page" : undefined}
+				>
+					<mailboxItem.icon className={cn("shrink-0", full ? "size-4" : "size-5")} aria-hidden="true" />
+					{full && mailboxItem.label}
+				</NavLink>
 			</div>
 
 			{admin.length > 0 && (
@@ -167,7 +170,11 @@ const Sidebar = ({ accountId, box, variant }: { accountId: AccountId | null; box
 			)}
 
 			<div className="flex-1" />
-			{full && accountId && <ConnectionCard accountId={accountId} />}
+			<div className="flex flex-col gap-0.5">
+				{personalNav.map((item) => (
+					<NavEntry key={item.key} item={item} variant={variant} />
+				))}
+			</div>
 			<div className={cn("flex items-center gap-2", full ? "justify-between px-1" : "flex-col")}>
 				{full && (
 					<span className="min-w-0 text-xs text-muted-ink">
@@ -182,6 +189,37 @@ const Sidebar = ({ accountId, box, variant }: { accountId: AccountId | null; box
 					</Button>
 				</div>
 			</div>
+		</nav>
+	);
+};
+
+/** Panel propio del módulo Buzón SUNAT: cuenta, bandejas, carpetas y etiquetas. */
+const MailboxSidebar = ({ accountId, box, variant }: { accountId: AccountId; box: MailBox | null; variant: "full" | "rail" }) => {
+	const session = useAppSession();
+	const counts = useUnreadCounts(accountId);
+	const full = variant === "full";
+
+	return (
+		<nav aria-label="Buzón SUNAT" className={cn("flex h-full flex-col gap-5 overflow-y-auto border-r border-line bg-paper", full ? "w-[232px] px-3.5 py-5" : "w-[76px] items-center px-2 py-4")}>
+			{full && <h2 className="px-2 text-base font-bold tracking-tight text-ink">Buzón SUNAT</h2>}
+
+			{session.visibleAccounts.length > 0 && (
+				<div className="flex flex-col gap-1">
+					{full && <SectionLabel>Cuenta SUNAT</SectionLabel>}
+					<AccountSelector activeId={accountId} compact={!full} />
+				</div>
+			)}
+
+			<div className="flex flex-col gap-0.5">
+				{accountNav(accountId).map((item) => (
+					<NavEntry key={item.key} item={item} variant={variant} count={item.count && counts ? counts[item.count] : undefined} />
+				))}
+			</div>
+
+			{full && box && <FolderAndTagLinks accountId={accountId} box={box} />}
+
+			<div className="flex-1" />
+			{full && <ConnectionCard accountId={accountId} />}
 		</nav>
 	);
 };
@@ -257,19 +295,23 @@ export const AppShell = () => {
 	const box = routeAccountId ? (boxFromPath(pathname) ?? "messages") : null;
 	const isDesktop = useIsDesktop();
 	const isMobile = useIsMobile();
+	const [collapsed, setCollapsed] = useState(false);
+	const mainVariant = isDesktop && !collapsed ? "full" : "rail";
+	const panelVariant = isDesktop ? "full" : "rail";
 
-	// Diseño: barra lateral gris (`bg-surface`) y área de contenido blanca.
+	// Diseño: barra principal gris (`bg-surface`), panel del módulo y contenido en tarjeta blanca.
 	return (
-		<div className="flex min-h-dvh bg-paper">
+		<div className="flex min-h-dvh bg-surface">
 			<a href="#contenido" className="sr-only z-50 rounded bg-paper px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
 				Saltar al contenido
 			</a>
 			{!isMobile && (
-				<aside className="sticky top-0 h-dvh shrink-0">
-					<Sidebar accountId={accountId} box={box} variant={isDesktop ? "full" : "rail"} />
+				<aside className="sticky top-0 flex h-dvh shrink-0">
+					<MainSidebar accountId={accountId} inMailbox={routeAccountId !== null} variant={mainVariant} onToggle={isDesktop ? () => setCollapsed((c) => !c) : undefined} />
+					{routeAccountId && <MailboxSidebar accountId={routeAccountId} box={box} variant={panelVariant} />}
 				</aside>
 			)}
-			<div className="flex min-w-0 flex-1 flex-col">
+			<div className="flex min-w-0 flex-1 flex-col bg-paper">
 				{isMobile && <MobileHeader accountId={accountId} />}
 				<main id="contenido" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-4 pb-24 outline-none md:px-8 md:pt-7 md:pb-10">
 					<div className="mx-auto max-w-[1040px]">

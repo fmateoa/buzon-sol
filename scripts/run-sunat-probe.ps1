@@ -1,10 +1,13 @@
 <# Pasa la credencial DPAPI al proceso de prueba por stdin, sin argumentos ni archivo de texto claro. #>
 [CmdletBinding()]
 param(
-    [ValidateSet('connection','passive-check','relogin-check','logout-check','dependency-check','inventory-check','catalog-check','read-safe-check','files-safe-check','login-diagnose','logout-diagnose','read-unread-check','collision-check','logout-delay','master-logout-js','logout-cookies','isolation-check','e2e-persist','search-check','label-check','schema-check','capacity-check','logout-lifetime','expiry-idle','expiry-active')]
+    [ValidateSet('connection','passive-check','relogin-check','logout-check','dependency-check','inventory-check','catalog-check','read-safe-check','files-safe-check','login-diagnose','logout-diagnose','read-unread-check','collision-check','logout-delay','master-logout-js','logout-cookies','isolation-check','e2e-persist','e2e-archive','search-check','label-check','schema-check','capacity-check','logout-lifetime','expiry-idle','expiry-active')]
     [string]$Mode = 'connection',
     [ValidateRange(1,180)][int]$Minutes = 15,
-    [string[]]$Names = @()
+    [string[]]$Names = @(),
+    # Solo e2e-archive: elementos ya leídos por cuenta que se abren, y si además se guardan sus archivos en el S3 local.
+    [ValidateRange(1,50)][int]$Items = 5,
+    [switch]$Files
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,7 +20,7 @@ function Read-Saved([string]$name) {
     return $saved
 }
 
-$script = if ($Mode -eq 'e2e-persist') { 'e2e-persist.ts' } else { 'probe-sunat-adapter.ts' }
+$script = if ($Mode -in 'e2e-persist','e2e-archive') { 'e2e-persist.ts' } else { 'probe-sunat-adapter.ts' }
 $savedList = @()
 try {
     $entries = @()
@@ -32,11 +35,13 @@ try {
     }
     $payload = if ($Names.Count -gt 0) { @{ accounts = $entries } | ConvertTo-Json -Depth 4 -Compress } else { $entries[0] | ConvertTo-Json -Compress }
     $env:SUNAT_PROBE_MINUTES = [string]$Minutes
+    $env:E2E_ARCHIVE_ITEMS = [string]$Items
+    if ($Files) { $env:E2E_ARCHIVE_FILES = '1' }
     $payload | pnpm --filter @buzon-sol/worker exec tsx "../../scripts/$script" "--$Mode"
     $code = $LASTEXITCODE
 } finally {
     foreach ($item in $savedList) { $item.Ruc.Dispose(); $item.User.Dispose(); $item.Password.Dispose() }
     $payload = $null
-    Remove-Item Env:SUNAT_PROBE_MINUTES -ErrorAction SilentlyContinue
+    Remove-Item Env:SUNAT_PROBE_MINUTES, Env:E2E_ARCHIVE_ITEMS, Env:E2E_ARCHIVE_FILES -ErrorAction SilentlyContinue
 }
 exit $code

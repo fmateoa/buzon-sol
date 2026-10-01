@@ -13,6 +13,9 @@ import { FilesService } from "./files";
 import { InventoryService } from "./inventory";
 import { ConnectionService } from "./connection";
 import { MailboxService } from "./mailbox";
+import { ArchiveService } from "./archive";
+import { SettingsService } from "./settings";
+import { clearSessionCookies, COOKIE_MODE_HEADER, setSessionCookies } from "./session-cookie";
 
 @Catch()
 export class SafeErrorFilter implements ExceptionFilter {
@@ -54,25 +57,45 @@ export class IdentityController {
     @Inject(InventoryService) private readonly inventory: InventoryService,
     @Inject(ConnectionService) private readonly connection: ConnectionService,
     @Inject(MailboxService) private readonly mailbox: MailboxService,
+    @Inject(ArchiveService) private readonly archive: ArchiveService,
+    @Inject(SettingsService) private readonly settings: SettingsService,
   ) {}
 
   @Post("auth/login")
-  async login(@Body() body: BodyObject, @Res({ passthrough: true }) reply: FastifyReply) {
+  async login(@Body() body: BodyObject, @Headers(COOKIE_MODE_HEADER) mode: string | undefined, @Res({ passthrough: true }) reply: FastifyReply) {
     reply.header("Cache-Control", "no-store");
-    return this.auth.login(body?.email, body?.password);
+    const result = await this.auth.login(body?.email, body?.password);
+    if (mode !== "cookie") return result;
+    setSessionCookies(reply, result.token, new Date(result.expiresAt));
+    return { expiresAt: result.expiresAt };
   }
 
   @Post("auth/logout")
   @HttpCode(204)
-  async logout(@Headers("authorization") bearer: string): Promise<void> {
+  async logout(@Headers("authorization") bearer: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<void> {
     await this.auth.logout(await this.auth.authenticate(bearer));
+    clearSessionCookies(reply);
+  }
+
+  @Post("auth/activity")
+  @HttpCode(204)
+  async sessionActivity(@Headers("authorization") bearer: string): Promise<void> {
+    await this.auth.touch(await this.auth.authenticate(bearer));
   }
 
   @Get("auth/me")
   async me(@Headers("authorization") bearer: string) {
     const user = await this.auth.authenticate(bearer);
-    return { id: user.id, email: user.email, name: user.name, roleId: user.roleId,
-      permissions: user.permissions, allAccounts: user.allAccounts, accountIds: user.accountIds };
+    return { id: user.id, email: user.email, name: user.name, roleId: user.roleId, roleName: user.roleName,
+      permissions: user.permissions, allAccounts: user.allAccounts, accountIds: user.accountIds,
+      preferences: { readWarningEnabled: user.readWarningEnabled },
+      policy: { passwordMinLength: await this.settings.get("security.passwordMinLength") } };
+  }
+
+  @Patch("auth/me/preferences")
+  @HttpCode(204)
+  async preferences(@Headers("authorization") bearer: string, @Body() body: BodyObject): Promise<void> {
+    await this.identity.setReadWarning(await this.auth.authenticate(bearer), body?.readWarningEnabled);
   }
 
   @Get("accounts")
@@ -85,6 +108,11 @@ export class IdentityController {
     return this.accountsService.list(await this.auth.authenticate(bearer));
   }
 
+  @Get("admin/account-options")
+  async accountOptions(@Headers("authorization") bearer: string) {
+    return this.identity.accountOptions(await this.auth.authenticate(bearer));
+  }
+
   @Post("admin/accounts")
   async createAccount(@Headers("authorization") bearer: string, @Body() body: BodyObject) {
     return this.accountsService.create(await this.auth.authenticate(bearer), body);
@@ -94,6 +122,11 @@ export class IdentityController {
   @HttpCode(204)
   async updateAccount(@Headers("authorization") bearer: string, @Param("accountId") accountId: string, @Body() body: BodyObject): Promise<void> {
     await this.accountsService.update(await this.auth.authenticate(bearer), accountId, body);
+  }
+
+  @Get("admin/accounts/:accountId/users")
+  async accountUsers(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
+    return this.accountsService.users(await this.auth.authenticate(bearer), accountId);
   }
 
   @Patch("admin/accounts/:accountId/active")
@@ -119,6 +152,17 @@ export class IdentityController {
     return this.connection.get(await this.auth.authenticate(bearer), accountId, testId);
   }
 
+  @Get("admin/accounts/:accountId/mailbox-settings")
+  async mailboxSettings(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
+    return this.archive.settings(await this.auth.authenticate(bearer), accountId);
+  }
+
+  @Patch("admin/accounts/:accountId/mailbox-settings")
+  @HttpCode(204)
+  async saveMailboxSettings(@Headers("authorization") bearer: string, @Param("accountId") accountId: string, @Body() body: BodyObject): Promise<void> {
+    await this.archive.saveSettings(await this.auth.authenticate(bearer), accountId, body);
+  }
+
   @Get("accounts/:accountId/schedule")
   async getSchedule(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
     return this.scheduling.get(await this.auth.authenticate(bearer), accountId);
@@ -134,6 +178,22 @@ export class IdentityController {
   async mail(@Headers("authorization") bearer: string, @Param("accountId") accountId: string,
     @Query() query: Record<string, string | undefined>) {
     return this.mailbox.list(await this.auth.authenticate(bearer), accountId, query);
+  }
+
+  @Get("accounts/:accountId/items/:itemId")
+  async item(@Headers("authorization") bearer: string, @Param("accountId") accountId: string, @Param("itemId") itemId: string) {
+    return this.mailbox.item(await this.auth.authenticate(bearer), accountId, itemId);
+  }
+
+  @Get("accounts/:accountId/items/:itemId/reads/:eventId")
+  async readStatus(@Headers("authorization") bearer: string, @Param("accountId") accountId: string,
+    @Param("itemId") itemId: string, @Param("eventId") eventId: string) {
+    return this.reading.readStatus(await this.auth.authenticate(bearer), accountId, itemId, eventId);
+  }
+
+  @Get("admin/runs")
+  async adminRuns(@Headers("authorization") bearer: string) {
+    return this.operations.runs(await this.auth.authenticate(bearer));
   }
 
   @Patch("accounts/:accountId/items/:itemId/review")
@@ -203,9 +263,35 @@ export class IdentityController {
     return this.inventory.start(await this.auth.authenticate(bearer), accountId);
   }
 
+  @Post("inventory")
+  async startAllInventories(@Headers("authorization") bearer: string) {
+    return this.inventory.startAll(await this.auth.authenticate(bearer));
+  }
+
+  @Get("accounts/:accountId/archive")
+  async archiveStatus(@Headers("authorization") bearer: string, @Param("accountId") accountId: string) {
+    return this.archive.status(await this.auth.authenticate(bearer), accountId);
+  }
+
+  @Post("accounts/:accountId/archive")
+  async startArchive(@Headers("authorization") bearer: string, @Param("accountId") accountId: string, @Body() body: BodyObject) {
+    return this.archive.start(await this.auth.authenticate(bearer), accountId, body);
+  }
+
   @Post("accounts/:accountId/runs/:runId/resume")
   async resumeInventory(@Headers("authorization") bearer: string, @Param("accountId") accountId: string, @Param("runId") runId: string) {
     return this.inventory.resume(await this.auth.authenticate(bearer), accountId, runId);
+  }
+
+  @Get("admin/settings")
+  async adminSettings(@Headers("authorization") bearer: string) {
+    return this.settings.list(await this.auth.authenticate(bearer));
+  }
+
+  @Patch("admin/settings")
+  @HttpCode(204)
+  async saveAdminSettings(@Headers("authorization") bearer: string, @Body() body: BodyObject): Promise<void> {
+    await this.settings.save(await this.auth.authenticate(bearer), body);
   }
 
   @Get("audit")

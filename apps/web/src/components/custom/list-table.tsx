@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Table, type TableKeyCurrent } from "lizaui/table";
-import { Pagination } from "lizaui/pagination";
 import { Button } from "lizaui/button";
 import {
 	DropdownMenu,
@@ -40,6 +39,21 @@ export type ColumnDef = {
 	lockVisible?: boolean;
 };
 
+/** Fondo de las filas del cuerpo: blanco, con gris suave al pasar el cursor (el encabezado conserva el de lizaui). */
+export const TABLE_ROW_CLASS = "bg-paper hover:bg-surface-2";
+
+/**
+ * lizaui oculta el encabezado de una columna oculta pero no sus celdas: sin esto las filas se
+ * corren una posición. `renderCells` devuelve un fragmento con una celda por columna (mismo orden
+ * que `columns`, luego la de acciones); aquí se descartan las de las columnas ocultas.
+ */
+export const withoutHiddenCells = (cells: ReactNode, columns: ColumnDef[], hidden: string[]): ReactNode => {
+	if (hidden.length === 0 || !isValidElement(cells)) return cells;
+	const raw = (cells as ReactElement<{ children?: ReactNode }>).props.children;
+	if (!Array.isArray(raw)) return cells;
+	return Children.toArray(raw.filter((_, index) => !(index < columns.length && hidden.includes(columns[index]!.id))));
+};
+
 /**
  * Listado paginado con `Table` de lizaui (no `DataTable`). Reglas aplicadas:
  * - Encabezado y filtros se mantienen con 0 resultados; los errores van fuera de la tabla.
@@ -72,6 +86,7 @@ interface ListTableProps<T> {
 	batchBar?: ReactNode;
 	countNoun?: [string, string];
 	summaryExtra?: ReactNode;
+	hideSummary?: boolean;
 }
 
 export const ListTable = <T extends object>({
@@ -97,6 +112,7 @@ export const ListTable = <T extends object>({
 	batchBar,
 	countNoun = ["registro", "registros"],
 	summaryExtra,
+	hideSummary,
 }: ListTableProps<T>) => {
 	const rows = page?.rows ?? [];
 	const selectableRows = rows.filter(isSelectable);
@@ -134,8 +150,8 @@ export const ListTable = <T extends object>({
 					</Table.Header>
 					<Table.Body data={rows} rowKey={(item) => rowKey(item)} isLoading={isLoading} loadingLabel="Cargando registros…" emptyContent={isLoading ? undefined : emptyContent}>
 						{({ item }) => (
-							<Table.BodyRow keyCurrent={{ id: rowKey(item), name: rowName(item) }} isCheck={isSelectable(item)} onChangeCheck={(key) => state.toggleSelection(key)} className={rowClassName?.(item)}>
-								{renderCells(item)}
+							<Table.BodyRow keyCurrent={{ id: rowKey(item), name: rowName(item) }} isCheck={isSelectable(item)} onChangeCheck={(key) => state.toggleSelection(key)} className={cn(TABLE_ROW_CLASS, rowClassName?.(item))}>
+								{withoutHiddenCells(renderCells(item), columns, state.hiddenColumns)}
 							</Table.BodyRow>
 						)}
 					</Table.Body>
@@ -151,6 +167,7 @@ export const ListTable = <T extends object>({
 					onChange={state.setPage}
 					countNoun={countNoun}
 					extra={summaryExtra}
+					hideSummary={hideSummary}
 				/>
 			)}
 		</div>
@@ -166,6 +183,7 @@ export const ListFooter = ({
 	onChange,
 	countNoun = ["registro", "registros"],
 	extra,
+	hideSummary = false,
 }: {
 	from: number;
 	to: number;
@@ -175,18 +193,22 @@ export const ListFooter = ({
 	onChange: (page: number, pageSize: number) => void;
 	countNoun?: [string, string];
 	extra?: ReactNode;
-}) => (
-	<div className="flex flex-col gap-3 text-sm text-muted-ink md:flex-row md:items-center md:justify-between">
-		<div className="flex flex-wrap items-center gap-3">
-			<span aria-live="polite">
-				{formatCount(total)} {total === 1 ? countNoun[0] : countNoun[1]} · Mostrando {formatCount(from)}–{formatCount(to)}
-			</span>
-			{extra}
-			<label className="flex items-center gap-2">
-				<span>Por página</span>
+	/** La pantalla ya muestra el conteo sobre la tabla. */
+	hideSummary?: boolean;
+}) => {
+	const lastPage = Math.max(1, Math.ceil(total / pageSize));
+	return (
+		<div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-ink">
+			<div className="flex flex-wrap items-center gap-3">
+				{!hideSummary && (
+					<span aria-live="polite">
+						{formatCount(total)} {total === 1 ? countNoun[0] : countNoun[1]} · Mostrando {formatCount(from)}–{formatCount(to)}
+					</span>
+				)}
+				{extra}
 				<Select value={String(pageSize)} onValueChange={(v) => onChange(1, Number(v))}>
-					<SelectTrigger size="sm" className="h-9 min-w-20 bg-paper" aria-label="Registros por página">
-						<SelectValue />
+					<SelectTrigger size="sm" className="h-9 min-w-36 border-transparent bg-transparent shadow-none" aria-label="Registros por página">
+						<SelectValue>{pageSize} por página</SelectValue>
 					</SelectTrigger>
 					<SelectContent>
 						{PAGE_SIZES.map((size) => (
@@ -196,19 +218,27 @@ export const ListFooter = ({
 						))}
 					</SelectContent>
 				</Select>
-			</label>
+			</div>
+			<nav aria-label="Paginación" className="flex items-center gap-3">
+				<Button size="sm" variant="bordered" disabled={page <= 1} onClick={() => onChange(page - 1, pageSize)} className="min-h-9 bg-paper">
+					‹ Anterior
+				</Button>
+				<span className="text-ink-2">
+					Página {formatCount(page)} de {formatCount(lastPage)}
+				</span>
+				<Button size="sm" variant="bordered" disabled={page >= lastPage} onClick={() => onChange(page + 1, pageSize)} className="min-h-9 bg-paper">
+					Siguiente ›
+				</Button>
+			</nav>
 		</div>
-		<nav aria-label="Paginación">
-			<Pagination total={total} page={page} limit={pageSize} isLimitSelect={false} color="primary" onChange={(v) => onChange(v.page, v.limit)} />
-		</nav>
-	</div>
-);
+	);
+};
 
 /** Menú de columnas: alterna `hiddenColumns` y permanece abierto tras cada cambio. */
-export const ColumnMenu = ({ columns, hidden, onToggle }: { columns: ColumnDef[]; hidden: string[]; onToggle: (id: string) => void }) => (
+export const ColumnMenu = ({ columns, hidden, onToggle, className }: { columns: ColumnDef[]; hidden: string[]; onToggle: (id: string) => void; className?: string }) => (
 	<DropdownMenu>
 		<DropdownMenuTrigger asChild>
-			<Button size="sm" variant="bordered" startContent={<Columns3 className="size-4" aria-hidden="true" />} className="bg-paper">
+			<Button size="sm" variant="bordered" startContent={<Columns3 className="size-4" aria-hidden="true" />} className={cn("bg-paper", className)}>
 				Columnas
 			</Button>
 		</DropdownMenuTrigger>

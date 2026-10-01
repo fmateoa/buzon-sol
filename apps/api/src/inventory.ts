@@ -44,6 +44,31 @@ export class InventoryService {
     return { id: run.id, state: run.state };
   }
 
+  /**
+   * One inventory per active account the actor may run: each company gets its own run, session and result.
+   * An account that cannot start (no credential, rejected credential, queue down) reports its code and never
+   * blocks the others.
+   */
+  async startAll(actor: Principal): Promise<{ accountId: string; runId: string | null; state: string | null; code: string | null }[]> {
+    this.auth.requirePermission(actor, "run_inventory");
+    this.requireGate();
+    const accounts: { id: string }[] = await this.db.query(
+      `SELECT a.id FROM sunat_accounts a WHERE a.active=true AND (?=true OR EXISTS
+         (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=a.id)) ORDER BY a.alias,a.id`,
+      [actor.allAccounts, actor.roleId]);
+    const results = [];
+    for (const account of accounts) {
+      try {
+        const run = await this.start(actor, account.id);
+        results.push({ accountId: account.id, runId: run.id, state: run.state, code: null });
+      } catch (error) {
+        if (!(error instanceof AppError)) throw error;
+        results.push({ accountId: account.id, runId: null, state: null, code: error.code });
+      }
+    }
+    return results;
+  }
+
   async resume(actor: Principal, accountId: string, runId: string): Promise<{ id: string; state: "pending" }> {
     this.auth.requireAccount(actor, "run_inventory", validId(accountId));
     validId(runId);

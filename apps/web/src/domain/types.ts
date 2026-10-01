@@ -28,6 +28,7 @@ export const PERMISSIONS = [
 	"configure_schedule",
 	"manage_accounts",
 	"manage_users_roles",
+	"manage_settings",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -59,6 +60,8 @@ export interface AppSession {
 	permissions: Permission[];
 	visibleAccounts: VisibleAccount[];
 	preferences: UserPreferences;
+	/** Mínimo de caracteres de una contraseña nueva (Configuraciones). */
+	passwordMinLength: number;
 }
 
 export interface UserPreferences {
@@ -119,6 +122,8 @@ export interface SunatTag {
 	name: string;
 	/** `false` si el código no está en el catálogo conocido: se muestra neutro. */
 	known: boolean;
+	/** Color `#rrggbb` que SUNAT asigna a la etiqueta; sin él se usa el neutro. */
+	color?: string | null;
 }
 
 export interface SunatFolder {
@@ -294,6 +299,51 @@ export interface AccountActivity {
 	history: InventoryRun[];
 }
 
+// ─── Archivo de la cuenta ────────────────────────────────────────────────────
+
+/** Qué guarda la app, por cuenta, de los elementos que SUNAT ya lista como leídos. */
+export interface MailboxSettings {
+	accountId: AccountId;
+	/** Guardar el contenido de los elementos ya leídos en SUNAT. Nunca abre un no leído. */
+	archiveContent: boolean;
+	/** Guardar además sus archivos. Exige `archiveContent`. */
+	archiveFiles: boolean;
+	/** Elementos por lote (una sesión SUNAT por lote). */
+	archiveBatchSize: number;
+}
+
+export interface ArchiveRun {
+	id: string;
+	trigger: "manual" | "inventory" | "continue";
+	state: "pending" | "running" | "complete" | "partial";
+	errorCode: string | null;
+	itemsDone: number;
+	itemsFailed: number;
+	filesStored: number;
+	filesFailed: number;
+	/** Leídos en SUNAT aún sin archivar al terminar el lote. */
+	remaining: number | null;
+	startedAt: IsoDateTime | null;
+	finishedAt: IsoDateTime | null;
+}
+
+export interface ArchiveStatus {
+	accountId: AccountId;
+	settings: MailboxSettings;
+	items: { total: number; readInSunat: number; unreadInSunat: number; withContent: number; pendingContent: number };
+	files: { stored: number; pending: number; failed: number };
+	current: ArchiveRun | null;
+	history: ArchiveRun[];
+}
+
+/** Resultado por cuenta de «Consultar todas»: una cuenta que no pudo iniciar no detiene a las demás. */
+export interface BulkInventoryResult {
+	accountId: AccountId;
+	alias: string;
+	started: boolean;
+	errorCode: string | null;
+}
+
 // ─── Administración ──────────────────────────────────────────────────────────
 
 export interface AdminAccount {
@@ -332,7 +382,7 @@ export interface ScheduleConfig {
 	pauseReason: PauseReason | null;
 }
 
-export type AuditAction = "create" | "update" | "disable" | "enable" | "preference" | "read" | "download" | "credential" | "test" | "failure";
+export type AuditAction = "create" | "update" | "disable" | "enable" | "preference" | "read" | "download" | "credential" | "test" | "failure" | "session" | "inventory";
 
 export interface AuditEntry {
 	id: string;
@@ -340,7 +390,7 @@ export interface AuditEntry {
 	actor: string;
 	action: AuditAction;
 	objectLabel: string;
-	objectType: "account" | "credential" | "schedule" | "role" | "user" | "preference" | "item" | "file";
+	objectType: "account" | "credential" | "schedule" | "role" | "user" | "preference" | "item" | "file" | "run" | "settings";
 	change: string;
 }
 
@@ -350,3 +400,26 @@ export interface AuditFilters {
 	actor: string | "all";
 	range: "7d" | "30d" | "all";
 }
+
+// ─── Configuraciones ─────────────────────────────────────────────────────────
+
+export const SETTING_KEYS = [
+	"session.absoluteMinutes",
+	"session.idleMinutes",
+	"security.passwordMinLength",
+	"security.maxFailedLogins",
+	"security.lockoutMinutes",
+] as const;
+export type SettingKey = (typeof SETTING_KEYS)[number];
+
+/** Un ajuste global con su valor actual, el valor por defecto y el rango que acepta el servidor. */
+export interface AppSetting {
+	key: SettingKey;
+	value: number;
+	default: number;
+	min: number;
+	max: number;
+	updatedAt: IsoDateTime | null;
+}
+
+export type SettingValues = Record<SettingKey, number>;

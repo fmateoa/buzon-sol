@@ -4,6 +4,7 @@
   "packageManager": "pnpm@11.18.0",
   "scripts": {
     "dev": "pnpm --filter @buzon-sol/web dev",
+    "dev:prototype": "pnpm --filter @buzon-sol/web dev:prototype",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",

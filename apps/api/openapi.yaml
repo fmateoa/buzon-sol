@@ -9,6 +9,7 @@ servers:
   - url: /api/v1
 security:
   - bearerAuth: []
+  - cookieAuth: []
 paths:
   /health:
     get:
@@ -20,6 +21,12 @@ paths:
     post:
       operationId: login
       security: []
+      description: >
+        Con la cabecera `X-Session-Mode: cookie` (la web) la sesión viaja en la cookie `bz_session`
+        (HttpOnly, SameSite=Strict, Path=/api/v1) y la respuesta solo trae `expiresAt`; se fija además
+        `bz_csrf`, que la web devuelve en `X-CSRF-Token` en POST/PATCH. Sin esa cabecera se devuelve el token Bearer.
+      parameters:
+        - { name: X-Session-Mode, in: header, required: false, schema: { type: string, enum: [cookie] } }
       requestBody:
         required: true
         content:
@@ -38,6 +45,15 @@ paths:
       responses:
         '204': { description: Sesión revocada }
         default: { $ref: '#/components/responses/Error' }
+  /auth/activity:
+    post:
+      operationId: sessionActivity
+      description: >
+        Renueva la ventana de inactividad de la sesión. Lo llama la web ante uso real (teclado, clic);
+        las consultas en segundo plano autentican pero no la renuevan. Como mucho una escritura por minuto.
+      responses:
+        '204': { description: Actividad registrada }
+        default: { $ref: '#/components/responses/Error' }
   /auth/me:
     get:
       operationId: currentUser
@@ -48,12 +64,24 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Principal' }
         default: { $ref: '#/components/responses/Error' }
+  /auth/me/preferences:
+    patch:
+      operationId: updatePreferences
+      description: Preferencia propia del usuario; queda en auditoría.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreferencesInput' }
+      responses:
+        '204': { description: Preferencia guardada }
+        default: { $ref: '#/components/responses/Error' }
   /accounts:
     get:
       operationId: visibleAccounts
       x-permission: view_mailbox
       responses:
-        '200': { description: Cuentas visibles para el rol }
+        '200': { description: 'Cuentas visibles para el rol: id, alias, active, rucMasked, scheduleState, pauseReason' }
         default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/mail:
     parameters:
@@ -74,12 +102,17 @@ paths:
           description: unread es indEstado=0; cualquier otro valor observado cuenta como leído
           schema: { type: string, enum: [all, unread, read], default: all }
         - { name: review, in: query, schema: { type: string, enum: [all, reviewed, pending], default: all } }
+        - name: content
+          in: query
+          description: stored son los elementos con contenido guardado (lectura explícita o archivo de la cuenta)
+          schema: { type: string, enum: [all, stored, missing], default: all }
         - { name: q, in: query, description: Texto literal en asunto o remitente, schema: { type: string, maxLength: 200 } }
         - { name: dateFrom, in: query, description: Día inclusivo en America/Lima, schema: { type: string, format: date } }
         - { name: dateTo, in: query, description: Día inclusivo en America/Lima, schema: { type: string, format: date } }
         - { name: folder, in: query, schema: { type: string, maxLength: 40 } }
         - { name: label, in: query, schema: { type: string, maxLength: 40 } }
-        - { name: sort, in: query, schema: { type: string, enum: [publishedAt, subject, sender, remoteState], default: publishedAt } }
+        - { name: seenAfter, in: query, description: Solo elementos vistos por primera vez después de este instante, schema: { type: string, format: date-time } }
+        - { name: sort, in: query, schema: { type: string, enum: [publishedAt, subject, sender, remoteState, firstSeenAt], default: publishedAt } }
         - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
       responses:
         '200':
@@ -154,6 +187,57 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RunResult' }
         default: { $ref: '#/components/responses/Error' }
+  /inventory:
+    post:
+      operationId: startAllInventories
+      x-permission: run_inventory
+      description: >-
+        Inicia un inventario por cada cuenta activa que el usuario puede consultar. Cada cuenta tiene su propia
+        corrida y sesión; la que no puede iniciar informa su código y no detiene a las demás.
+      responses:
+        '201':
+          description: Resultado por cuenta
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AccountRunResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/archive:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: getArchiveStatus
+      x-permission: view_mailbox
+      responses:
+        '200':
+          description: Avance del archivo de la cuenta en cantidades; nunca consulta SUNAT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchiveStatus' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: startArchive
+      x-permission: run_inventory y read_content
+      description: >-
+        Encola un lote de archivo. El worker guarda contenido y archivos solo de elementos que SUNAT ya lista como
+        leídos; un no leído se abre únicamente con la lectura explícita. Requiere SUNAT_READ_VALIDATED, la cuenta
+        activa con archiveContent y credencial válida.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                retryFailed: { type: boolean, default: false, description: Da otra ronda a elementos y archivos que agotaron sus intentos }
+      responses:
+        '201':
+          description: Lote persistido y encolado, o el que ya estaba en curso
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchiveRunResult' }
+        default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/runs/{runId}/resume:
     parameters:
       - { $ref: '#/components/parameters/AccountId' }
@@ -187,6 +271,50 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReadResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/items/{itemId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getItem
+      x-permission: view_mailbox
+      responses:
+        '200':
+          description: Metadatos persistidos de un elemento; nunca consulta SUNAT ni abre detalle
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailItem' }
+        default: { $ref: '#/components/responses/Error' }
+  /accounts/{accountId}/items/{itemId}/reads/{eventId}:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+      - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getReadStatus
+      x-permission: read_content
+      responses:
+        '200':
+          description: Avance de una lectura explícita encolada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, enum: [pending, calling, complete, uncertain, failed, denied] }
+                  remoteBefore: { type: integer, nullable: true }
+                  remoteAfter: { type: integer, nullable: true }
+                  updateLeido: { type: boolean, nullable: true }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/runs:
+    get:
+      operationId: listAllRuns
+      x-permission: manage_accounts
+      responses:
+        '200': { description: Últimas 200 consultas de todas las cuentas con su alias; solo estado persistido }
         default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/items/{itemId}/detail:
     parameters:
@@ -275,7 +403,7 @@ paths:
       operationId: managedAccounts
       x-permission: manage_accounts
       responses:
-        '200': { description: Cuentas con RUC y usuario SOL enmascarados }
+        '200': { description: 'Cuentas con RUC y usuario SOL enmascarados, createdAt, credentialStatus, credentialSavedAt, scheduleState, pauseReason, nextRunAt y userCount' }
         default: { $ref: '#/components/responses/Error' }
     post:
       operationId: createAccount
@@ -300,7 +428,23 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/AccountUpdate' }
       responses:
-        '204': { description: Alias y usuario SOL actualizados }
+        '204': { description: Alias actualizado; el usuario SOL solo cambia si se envía }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/users:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: accountUsers
+      x-permission: manage_accounts
+      responses:
+        '200': { description: 'Usuarios cuyo rol alcanza la cuenta: id, email, name, status, roleId, roleName, lastLoginAt' }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/account-options:
+    get:
+      operationId: accountOptions
+      x-permission: manage_users_roles o manage_accounts
+      responses:
+        '200': { description: Solo id y alias de cada cuenta, para asignarlas a roles }
         default: { $ref: '#/components/responses/Error' }
   /admin/accounts/{accountId}/active:
     parameters:
@@ -315,6 +459,30 @@ paths:
             schema: { $ref: '#/components/schemas/ActiveInput' }
       responses:
         '204': { description: Cuenta activada o desactivada }
+        default: { $ref: '#/components/responses/Error' }
+  /admin/accounts/{accountId}/mailbox-settings:
+    parameters:
+      - { $ref: '#/components/parameters/AccountId' }
+    get:
+      operationId: getMailboxSettings
+      x-permission: manage_accounts
+      responses:
+        '200':
+          description: Configuración del archivo de la cuenta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailboxSettings' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: saveMailboxSettings
+      x-permission: manage_accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MailboxSettingsInput' }
+      responses:
+        '204': { description: Configuración guardada y auditada }
         default: { $ref: '#/components/responses/Error' }
   /admin/accounts/{accountId}/credential:
     parameters:
@@ -354,7 +522,7 @@ paths:
       operationId: listUsers
       x-permission: manage_users_roles
       responses:
-        '200': { description: Usuarios sin hashes de contraseña }
+        '200': { description: 'Usuarios sin hashes de contraseña, con roleName y lastLoginAt (último ingreso)' }
         default: { $ref: '#/components/responses/Error' }
     post:
       operationId: createUser
@@ -400,7 +568,7 @@ paths:
       operationId: listRoles
       x-permission: manage_users_roles
       responses:
-        '200': { description: Roles, permisos y cuentas asignadas }
+        '200': { description: 'Roles, permisos, cuentas asignadas y userCount (usuarios no desactivados)' }
         default: { $ref: '#/components/responses/Error' }
     post:
       operationId: createRole
@@ -427,12 +595,55 @@ paths:
       responses:
         '204': { description: Rol actualizado; revocación efectiva inmediatamente }
         default: { $ref: '#/components/responses/Error' }
+  /admin/settings:
+    get:
+      operationId: listSettings
+      x-permission: manage_settings
+      description: Ajustes globales con su valor vigente, el valor por defecto y el rango aceptado.
+      responses:
+        '200':
+          description: Todos los ajustes conocidos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Setting' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: saveSettings
+      x-permission: manage_settings
+      description: >
+        Guarda uno o más ajustes en una sola transacción: si uno es inválido no se guarda ninguno.
+        `session.idleMinutes` no puede superar `session.absoluteMinutes`. Un valor igual al por defecto
+        borra la fila. La duración máxima aplica a las sesiones nuevas; la inactividad y la seguridad, de inmediato.
+        Queda un evento de auditoría (`object_type=settings`) con los valores anterior y nuevo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  type: object
+                  minProperties: 1
+                  additionalProperties: false
+                  properties:
+                    session.absoluteMinutes: { type: integer, minimum: 15, maximum: 43200 }
+                    session.idleMinutes: { type: integer, minimum: 5, maximum: 43200 }
+                    security.passwordMinLength: { type: integer, minimum: 8, maximum: 64 }
+                    security.maxFailedLogins: { type: integer, minimum: 3, maximum: 20 }
+                    security.lockoutMinutes: { type: integer, minimum: 1, maximum: 1440 }
+      responses:
+        '204': { description: Ajustes guardados }
+        default: { $ref: '#/components/responses/Error' }
   /audit:
     get:
       operationId: listAudit
       x-permission: view_audit
       responses:
-        '200': { description: Últimos 100 eventos visibles }
+        '200': { description: 'Últimos 100 eventos visibles, con actorName, accountAlias y objectName (usuario o rol)' }
         default: { $ref: '#/components/responses/Error' }
   /audit.csv:
     get:
@@ -462,6 +673,7 @@ paths:
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
+    cookieAuth: { type: apiKey, in: cookie, name: bz_session }
   parameters:
     AccountId: { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
     ItemId: { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -479,6 +691,20 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
   schemas:
+    Setting:
+      type: object
+      required: [key, group, unit, value, default, min, max, updatedAt]
+      properties:
+        key:
+          type: string
+          enum: [session.absoluteMinutes, session.idleMinutes, security.passwordMinLength, security.maxFailedLogins, security.lockoutMinutes]
+        group: { type: string, enum: [session, security] }
+        unit: { type: string, enum: [minutes, characters, attempts] }
+        value: { type: integer }
+        default: { type: integer }
+        min: { type: integer }
+        max: { type: integer }
+        updatedAt: { type: string, format: date-time, nullable: true, description: Null si usa el valor por defecto }
     Error:
       type: object
       required: [code]
@@ -494,18 +720,29 @@ components:
         password: { type: string }
     LoginResult:
       type: object
-      required: [token, expiresAt]
+      required: [expiresAt]
       properties:
-        token: { type: string, description: Token opaco; solo aparece en esta respuesta }
+        token: { type: string, description: Token opaco; solo con Bearer (sin X-Session-Mode) y solo en esta respuesta }
         expiresAt: { type: string, format: date-time }
     Principal:
       type: object
-      required: [id, email, name, roleId, permissions, allAccounts, accountIds]
+      required: [id, email, name, roleId, roleName, permissions, allAccounts, accountIds, preferences, policy]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         name: { type: string }
         roleId: { type: string, format: uuid }
+        roleName: { type: string }
+        preferences:
+          type: object
+          required: [readWarningEnabled]
+          properties:
+            readWarningEnabled: { type: boolean }
+        policy:
+          type: object
+          required: [passwordMinLength]
+          properties:
+            passwordMinLength: { type: integer, description: Mínimo vigente para contraseñas nuevas }
         permissions:
           type: array
           items: { type: string }
@@ -548,6 +785,81 @@ components:
         labelCode: { type: string, nullable: true }
         attachmentCount: { type: integer, nullable: true, description: cantidadArchAdj anunciado en el listado }
         reviewed: { type: boolean, description: Estado local de este usuario }
+        firstSeenAt: { type: string, format: date-time }
+        labelName: { type: string, nullable: true, description: Nombre de la etiqueta en el último catálogo observado }
+        labelColor: { type: string, nullable: true, description: Color #rrggbb de la etiqueta en el último catálogo observado }
+        starred: { type: boolean, description: indDesta=1 }
+        urgent: { type: boolean, description: indUrg=1 }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        openedByUser: { type: boolean, description: Este usuario completó una lectura explícita del elemento }
+        contentStored: { type: boolean, description: Hay contenido guardado para el elemento }
+        storedFiles: { type: integer, description: Archivos del elemento ya guardados }
+    AccountRunResult:
+      type: object
+      required: [accountId, runId, state, code]
+      properties:
+        accountId: { type: string, format: uuid }
+        runId: { type: string, format: uuid, nullable: true }
+        state: { type: string, nullable: true, enum: [pending, running] }
+        code: { type: string, nullable: true, description: Código de error de la cuenta que no pudo iniciar }
+    MailboxSettingsInput:
+      type: object
+      required: [archiveContent, archiveFiles, archiveBatchSize]
+      properties:
+        archiveContent: { type: boolean, description: Guardar el contenido de elementos ya leídos en SUNAT }
+        archiveFiles: { type: boolean, description: Guardar además sus archivos; exige archiveContent }
+        archiveBatchSize: { type: integer, minimum: 1, maximum: 2000, description: Elementos por lote y sesión }
+    MailboxSettings:
+      allOf:
+        - { $ref: '#/components/schemas/MailboxSettingsInput' }
+        - type: object
+          required: [accountId]
+          properties:
+            accountId: { type: string, format: uuid }
+    ArchiveRunResult:
+      type: object
+      required: [id, state]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [pending, running] }
+    ArchiveRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trigger: { type: string, enum: [manual, inventory, continue] }
+        state: { type: string, enum: [pending, running, complete, partial] }
+        errorCode: { type: string, nullable: true }
+        itemsDone: { type: integer }
+        itemsFailed: { type: integer }
+        filesStored: { type: integer }
+        filesFailed: { type: integer }
+        remaining: { type: integer, nullable: true, description: Elementos leídos aún sin archivar al terminar el lote }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    ArchiveStatus:
+      type: object
+      required: [settings, items, files, current, history]
+      properties:
+        settings: { $ref: '#/components/schemas/MailboxSettings' }
+        items:
+          type: object
+          properties:
+            total: { type: integer }
+            readInSunat: { type: integer }
+            unreadInSunat: { type: integer, description: No se archivan; requieren lectura explícita }
+            withContent: { type: integer }
+            pendingContent: { type: integer, description: Leídos en SUNAT sin contenido guardado }
+        files:
+          type: object
+          properties:
+            stored: { type: integer }
+            pending: { type: integer }
+            failed: { type: integer }
+        current: { allOf: [{ $ref: '#/components/schemas/ArchiveRun' }], nullable: true }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/ArchiveRun' }
     RunResult:
       type: object
       required: [id, state]
@@ -572,9 +884,14 @@ components:
         alias: { type: string, maxLength: 160 }
         ruc: { type: string, pattern: '^[0-9]{11}$', writeOnly: true }
         solUser: { type: string, maxLength: 100, writeOnly: true }
+    PreferencesInput:
+      type: object
+      required: [readWarningEnabled]
+      properties:
+        readWarningEnabled: { type: boolean }
     AccountUpdate:
       type: object
-      required: [alias, solUser]
+      required: [alias]
       properties:
         alias: { type: string, maxLength: 160 }
         solUser: { type: string, maxLength: 100, writeOnly: true }
@@ -618,7 +935,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [view_mailbox, read_content, download_file, mark_reviewed, run_inventory, view_audit, configure_schedule, manage_accounts, manage_users_roles]
+            enum: [view_mailbox, read_content, download_file, mark_reviewed, run_inventory, view_audit, configure_schedule, manage_accounts, manage_users_roles, manage_settings]
         allAccounts: { type: boolean }
         accountIds:
           type: array
@@ -639,7 +956,7 @@ components:
           type: array
           minItems: 1
           items: { type: string, enum: [messages, notifications] }
-        state: { type: string, enum: [disabled, paused], description: active no disponible hasta validar cron SUNAT }
+        state: { type: string, enum: [disabled, paused, active], description: active exige SUNAT_CRON_VALIDATED, SUNAT_TRANSPORT_VALIDATED y credencial válida }
         downloadReadAttachments: { type: boolean }
         notifyInApp: { type: boolean }
         notifyDailyEmail: { type: boolean, const: false }

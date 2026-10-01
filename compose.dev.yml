@@ -1,10 +1,10 @@
 # Local development stack: API, worker, MySQL, Redis and MinIO with a private bucket.
-# Create .env.dev first with `node scripts/dev-env.mjs` (random local secrets, never committed).
+# Create apps/api/.env first with `node scripts/dev-env.mjs` (random local secrets, never committed).
 # SUNAT jobs stay disabled: the transport is NO_VALIDADO and no SUNAT_* gate is set here.
 x-app: &app
   build: .
   image: buzon-sol-dev:local
-  env_file: .env.dev
+  env_file: apps/api/.env
   environment: &app-env
     DB_HOST: mysql
     DB_PORT: "3306"
@@ -18,7 +18,7 @@ x-app: &app
 services:
   mysql:
     image: mysql:8.4
-    env_file: .env.dev
+    env_file: apps/api/.env
     environment:
       MYSQL_DATABASE: buzon_sol
       MYSQL_USER: buzon
@@ -38,7 +38,7 @@ services:
   minio:
     # Community MinIO build (unmaintained upstream). Fine for local development; production needs a supported S3.
     image: bitnamilegacy/minio:2025.5.24
-    env_file: .env.dev
+    env_file: apps/api/.env
     environment:
       MINIO_DEFAULT_BUCKETS: buzon
     ports: ["127.0.0.1:39000:9000", "127.0.0.1:39001:9001"]

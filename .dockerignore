@@ -2,7 +2,7 @@
 .git
 .claude
 .playwright-cli
-.env*
+**/.env*
 apps/web/*
 !apps/web/package.json
 specs

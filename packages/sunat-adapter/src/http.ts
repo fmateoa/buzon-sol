@@ -17,7 +17,7 @@ export interface SolDetail {
   updateLeido: boolean | null;
   generatedUrl: string | null;
   files: { kind: "attachment" | "generated_document"; codArchivo: string | null;
-    numId: string | null; name: string | null }[];
+    numId: string | null; name: string | null; sizeBytes: number | null }[];
 }
 export interface SolFileResponse { status: number; contentType: string; bytes: Buffer; filename?: string | null;
   verifiedGeneratedDocument?: boolean }
@@ -262,7 +262,8 @@ export class SunatHttpSession implements InventoryClient {
       const name = typeof file.nomArchivo === "string" ? file.nomArchivo :
         typeof file.nomAdjunto === "string" ? file.nomAdjunto : null;
       return { kind: isGenerated ? "generated_document" : "attachment", codArchivo: isCode ? String(code) : null,
-        numId: numId == null ? null : String(numId), name };
+        numId: numId == null ? null : String(numId), name,
+        sizeBytes: typeof file.cntTamarch === "number" && Number.isInteger(file.cntTamarch) ? file.cntTamarch : null };
     });
     let generatedUrl: string | null = null;
     if (typeof data.url === "string" && data.url) {
@@ -301,6 +302,15 @@ export class SunatHttpSession implements InventoryClient {
     if (detail.files.filter((file) => file.kind === "attachment" && file.codArchivo === codArchivo).length !== 1) {
       throw new AppError("schema_changed");
     }
+    return this.downloadAttachment(codArchivo);
+  }
+
+  /**
+   * C-05 download only. `codArchivo=0` does not identify a file by itself: call this right after `readDetail` of
+   * the owning item, in the same session, with nothing else in between for the account.
+   */
+  async downloadAttachment(codArchivo: string): Promise<SolFileResponse> {
+    if (!/^\d+$/.test(codArchivo)) throw new AppError("validation");
     const url = sunatUrl(`https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor/bajarArchivo/${codArchivo}/0/0/${this.credential.ruc}`);
     const { response } = await this.request(url, { headers: this.visorHeaders() });
     return { status: response.status, contentType: response.headers.get("Content-Type") ?? "",
@@ -313,7 +323,16 @@ export class SunatHttpSession implements InventoryClient {
     if (!detail.generatedUrl || detail.files.filter((file) => file.kind === "generated_document" && file.numId === numId).length !== 1) {
       throw new AppError("schema_changed");
     }
-    const { response } = await this.request(sunatUrl(detail.generatedUrl), { headers: this.visorHeaders() });
+    return this.downloadGeneratedDocument(detail.generatedUrl);
+  }
+
+  /** C-06 with the exact `generatedUrl` a detail of this session returned; the URL is never built or logged. */
+  async downloadGeneratedDocument(generatedUrl: string): Promise<SolFileResponse> {
+    const target = sunatUrl(generatedUrl);
+    if (target.hostname !== "ww1.sunat.gob.pe" || !target.pathname.endsWith("/cl-ti-iagenerador/gendocS01Alias")) {
+      throw new AppError("schema_changed");
+    }
+    const { response } = await this.request(target, { headers: this.visorHeaders() });
     const contentType = response.headers.get("Content-Type") ?? "";
     const bytes = await this.boundedBody(response);
     const body = bytes.toString("utf8");

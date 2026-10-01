@@ -84,7 +84,7 @@ export const SummaryPage = () => {
 				title="Resumen del buzón"
 				description={
 					<>
-						{account.alias} · <span className="mono">RUC {account.rucMasked}</span> (ficticio) · Última consulta: {lastRun}
+						{account.alias} · <span className="mono">RUC {account.rucMasked}</span>{import.meta.env.VITE_DATA_SOURCE === "backend" ? "" : " (ficticio)"} · Última consulta: {lastRun}
 						{data && <span className="block">{data.scheduleText}{data.connection.nextRunAt ? ` · próxima ${formatTime(data.connection.nextRunAt)}` : ""}</span>}
 					</>
 				}

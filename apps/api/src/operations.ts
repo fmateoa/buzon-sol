@@ -25,7 +25,22 @@ export class OperationsService {
        SUM(unique_rows) AS uniqueRows,MAX(declared_records) AS declaredRecords,
        MAX(declared_pages) AS declaredPages
        FROM sync_pages WHERE run_id=? GROUP BY tipo_msj`, [current.id]) : [];
-    return { accountId, current, pages, history: runs };
+    const seen = current?.startedAt ? await this.db.query(
+      "SELECT tipo_msj AS tipoMsj,COUNT(*) AS seen FROM mail_items WHERE account_id=? AND last_seen_at>=? GROUP BY tipo_msj",
+      [accountId, current.startedAt]) : [];
+    return { accountId, current, pages, seen, history: runs };
+  }
+
+  /** Recent runs of every account, for the administration view; persisted state only. */
+  async runs(actor: Principal) {
+    this.auth.requirePermission(actor, "manage_accounts");
+    return this.db.query(
+      `SELECT r.id,r.account_id AS accountId,a.alias AS accountAlias,r.mode,r.state,r.started_at AS startedAt,
+         r.finished_at AS finishedAt,r.resume_box AS resumeBox,r.resume_page AS resumePage,r.error_code AS errorCode,
+         r.boxes_json AS boxes,r.new_messages AS newMessages,r.new_notifications AS newNotifications,
+         (SELECT COALESCE(SUM(p.rows_received),0) FROM sync_pages p WHERE p.run_id=r.id) AS received
+       FROM sync_runs r JOIN sunat_accounts a ON a.id=r.account_id
+       ORDER BY COALESCE(r.started_at,'9999-12-31') DESC,r.id DESC LIMIT 200`);
   }
 
   async summary(actor: Principal, accountId: string) {
@@ -44,7 +59,20 @@ export class OperationsService {
     const baselineCounts: { tipo_msj: number; total: number }[] = baseline.length ? await this.db.query(
       "SELECT tipo_msj,COUNT(*) AS total FROM mail_items WHERE account_id=? AND first_seen_at<=? GROUP BY tipo_msj",
       [accountId, baseline[0].finished_at]) : [];
+    const reviewBacklog: { tipo_msj: number; n: number }[] = await this.db.query(
+      `SELECT i.tipo_msj,COUNT(*) AS n FROM mail_items i
+       JOIN mail_details d ON d.item_id=i.id AND d.account_id=i.account_id
+       LEFT JOIN mail_reviews v ON v.item_id=i.id AND v.user_id=?
+       WHERE i.account_id=? AND i.ind_estado<>0 AND COALESCE(v.reviewed,false)=false GROUP BY i.tipo_msj`, [actor.id, accountId]);
+    const failedFiles: { n: number }[] = await this.db.query(
+      "SELECT COUNT(*) AS n FROM file_assets WHERE account_id=? AND state='failed'", [accountId]);
+    // Items first seen after the complete run before the latest one are the "new" ones of the last check.
+    const previous: { finished_at: Date }[] = await this.db.query(
+      "SELECT finished_at FROM sync_runs WHERE account_id=? AND state='complete' ORDER BY finished_at DESC LIMIT 1 OFFSET 1", [accountId]);
+    const pendingReview = (code: number) => Number(reviewBacklog.find((row) => Number(row.tipo_msj) === code)?.n ?? 0);
     return { accountId, state: latest[0]?.state ?? null, verified,
+      pendingReview: { messages: pendingReview(1), notifications: pendingReview(2) },
+      failedFiles: Number(failedFiles[0]?.n ?? 0), newSince: previous[0]?.finished_at ?? null,
       boxes: { messages: { ...this.boxCount(counts, 1), lastVerifiedCount: baseline.length ? this.baselineCount(baselineCounts, 1) : null },
         notifications: { ...this.boxCount(counts, 2), lastVerifiedCount: baseline.length ? this.baselineCount(baselineCounts, 2) : null } } };
   }
@@ -63,8 +91,12 @@ export class OperationsService {
     if (!Number.isInteger(limit) || limit < 1 || limit > 10_000) throw new AppError("validation");
     return this.db.query(
       `SELECT e.id,e.actor_user_id AS actorId,e.account_id AS accountId,e.action,
-        e.object_type AS objectType,e.object_id AS objectId,e.created_at AS at
-       FROM audit_events e WHERE (?=true OR
+        e.object_type AS objectType,e.object_id AS objectId,e.created_at AS at,
+        u.name AS actorName,a.alias AS accountAlias,COALESCE(ou.name,orl.name) AS objectName
+       FROM audit_events e LEFT JOIN app_users u ON u.id=e.actor_user_id
+       LEFT JOIN sunat_accounts a ON a.id=e.account_id
+       LEFT JOIN app_users ou ON e.object_type='user' AND ou.id=e.object_id
+       LEFT JOIN roles orl ON e.object_type='role' AND orl.id=e.object_id WHERE (?=true OR
          (e.account_id IS NOT NULL AND EXISTS
            (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=e.account_id)))
        ORDER BY e.created_at DESC LIMIT ?`, [actor.allAccounts, actor.roleId, limit]);

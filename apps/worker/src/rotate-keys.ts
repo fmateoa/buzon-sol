@@ -58,7 +58,7 @@ export async function rotateSecrets(db: DataSource, target: RotationTarget): Pro
 }
 
 async function cli(): Promise<void> {
-  const { workerDataSource } = await import("./main.js");
+  const { workerDataSource } = await import("./data-source.js");
   const publicKeyPem = process.env.SOL_PUBLIC_KEY_PEM?.replace(/\\n/g, "\n") ?? "";
   const db = await workerDataSource().initialize();
   try {

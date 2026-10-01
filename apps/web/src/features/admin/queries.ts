@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useAdapter } from "@/app/adapter-context";
 import { qk } from "@/app/query-keys";
 import type { AccountFilters, AccountInput, AccountSortColumn, AppError, AuditSortColumn, CommandResult, RoleFilters, RoleInput, RoleSortColumn, UserFilters, UserInput, UserSortColumn } from "@/domain/adapter";
-import type { AccountId, AuditFilters, ListRequest, RoleId, ScheduleConfig, UserId } from "@/domain/types";
+import type { AccountId, AuditFilters, ListRequest, MailboxSettings, RoleId, ScheduleConfig, SettingValues, UserId } from "@/domain/types";
 
 const unwrap = async <T>(promise: Promise<CommandResult<T>>): Promise<T> => {
 	const result = await promise;
@@ -72,6 +72,22 @@ export const useSaveSchedule = () => {
 	return useAdminMutation((config: Omit<ScheduleConfig, "nextRuns" | "pauseReason">) => adapter.saveSchedule(config));
 };
 
+export const useMailboxSettings = (accountId: AccountId) => {
+	const adapter = useAdapter();
+	return useQuery({ queryKey: qk.admin.mailboxSettings(accountId), queryFn: () => adapter.getMailboxSettings(accountId) });
+};
+
+export const useSaveMailboxSettings = () => {
+	const adapter = useAdapter();
+	return useAdminMutation((settings: MailboxSettings) => adapter.saveMailboxSettings(settings));
+};
+
+/** Un inventario por cada cuenta activa permitida; devuelve el resultado de cada una. */
+export const useStartAllInventories = () => {
+	const adapter = useAdapter();
+	return useAdminMutation(() => adapter.startAllInventories());
+};
+
 export const useAccountUsers = (accountId: AccountId) => {
 	const adapter = useAdapter();
 	return useQuery({ queryKey: qk.admin.accountUsers(accountId), queryFn: () => adapter.listAccountUsers(accountId) });
@@ -134,4 +150,16 @@ export const useAudit = (request: ListRequest<AuditFilters, AuditSortColumn>) =>
 export const useExportAudit = () => {
 	const adapter = useAdapter();
 	return useMutation<string, AppError, AuditFilters>({ mutationFn: (filters) => unwrap(adapter.exportAuditCsv(filters)) });
+};
+
+// ─── Configuraciones ────────────────────────────────────────────────────────
+
+export const useSettings = () => {
+	const adapter = useAdapter();
+	return useQuery({ queryKey: qk.admin.settings, queryFn: () => adapter.listSettings() });
+};
+
+export const useSaveSettings = () => {
+	const adapter = useAdapter();
+	return useAdminMutation((values: Partial<SettingValues>) => adapter.saveSettings(values));
 };

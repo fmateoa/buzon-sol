@@ -1,3 +1,4 @@
+import { Power, PowerOff } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { Formik, type FormikHelpers } from "formik";
 import { useQueryClient } from "@tanstack/react-query";
@@ -304,14 +305,30 @@ export const TestConnectionControl = ({ account }: { account: AdminAccount }) =>
 };
 
 /** Desactivar detiene el programador; conserva inventario y auditoría. */
-export const AccountActiveControl = ({ account, compact = false }: { account: AdminAccount; compact?: boolean }) => {
+export const AccountActiveControl = ({ account, compact = false, size }: { account: AdminAccount; compact?: boolean; size?: "sm" }) => {
 	const setActive = useSetAccountActive();
 	const [confirm, setConfirm] = useState(false);
 	return (
 		<>
-			<Button variant={compact ? "light" : "bordered"} color={account.active ? "danger" : "primary"} onClick={() => setConfirm(true)} disabled={setActive.isPending} className={compact ? "min-h-10 px-2 font-semibold" : undefined}>
-				{account.active ? "Desactivar cuenta" : "Activar cuenta"}
-			</Button>
+			{size ? (
+				<Button
+					size={size}
+					isIconOnly
+					variant="light"
+					color={account.active ? "danger" : "primary"}
+					onClick={() => setConfirm(true)}
+					disabled={setActive.isPending}
+					aria-label={`${account.active ? "Desactivar" : "Activar"} ${account.alias}`}
+					title={account.active ? "Desactivar" : "Activar"}
+					className="size-9 min-w-9"
+				>
+					{account.active ? <PowerOff className="size-4" aria-hidden="true" /> : <Power className="size-4" aria-hidden="true" />}
+				</Button>
+			) : (
+				<Button variant={compact ? "light" : "bordered"} color={account.active ? "danger" : "primary"} onClick={() => setConfirm(true)} disabled={setActive.isPending} className={compact ? "min-h-10 px-2 font-semibold" : undefined}>
+					{account.active ? "Desactivar cuenta" : "Activar cuenta"}
+				</Button>
+			)}
 			{setActive.isError && <span className="text-sm text-err">{errorCopy(setActive.error).title}</span>}
 			<ResponsiveDialog
 				open={confirm}

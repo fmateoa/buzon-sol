@@ -4,8 +4,24 @@
 		{
 			"name": "web",
 			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["--filter", "@buzon-sol/web", "dev"],
+			"runtimeArgs": [
+				"--filter",
+				"@buzon-sol/web",
+				"dev"
+			],
 			"port": 5173
+		},
+		{
+			"name": "web-prototype",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": [
+				"--filter",
+				"@buzon-sol/web",
+				"dev:prototype",
+				"--port",
+				"5183"
+			],
+			"port": 5183
 		}
 	]
 }

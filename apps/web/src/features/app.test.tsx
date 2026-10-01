@@ -1,6 +1,6 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ACCOUNT_IDS } from "@/adapters/local/fixtures";
 import { EMAILS, renderApp } from "@/test/render-app";
 
@@ -11,7 +11,6 @@ describe("Acceso y navegación (FE-1)", () => {
 	it("sin sesión redirige al login, que nunca pide Clave SOL", async () => {
 		renderApp(`/c/${DEMO}/resumen`, null);
 		expect(await screen.findByRole("heading", { name: "Ingresar" })).toBeInTheDocument();
-		expect(screen.getByText(/Aquí no se pide ninguna Clave SOL/)).toBeInTheDocument();
 		expect(screen.queryByLabelText(/Clave SOL/)).not.toBeInTheDocument();
 	});
 
@@ -102,7 +101,7 @@ describe("Resumen y bandejas (FE-2)", () => {
 		await user.click(await screen.findByRole("button", { name: "Solo no leídos" }));
 		expect(screen.getByRole("button", { name: /Solo no leídos/ })).toHaveAttribute("aria-pressed", "true");
 		await router.navigate(`/c/${ACCOUNT_IDS.servicios}/mensajes`);
-		await screen.findByText(/3\s328 mensajes/);
+		await screen.findByText((_, el) => el?.tagName === "P" && /^3\s328 mensajes/.test(el.textContent ?? ""));
 		expect(screen.getByRole("button", { name: /Todos/ })).toHaveAttribute("aria-pressed", "true");
 		expect(screen.getByRole("button", { name: /Solo no leídos/ })).toHaveAttribute("aria-pressed", "false");
 	});
@@ -225,5 +224,71 @@ describe("Actividad y administración (FE-4)", () => {
 		expect(within(dialog).getByText("Usuario Demo Seis")).toBeInTheDocument();
 		await user.click(within(dialog).getByRole("button", { name: "Desactivar" }));
 		expect(await screen.findByText("2 actualizados")).toBeInTheDocument();
+	});
+});
+
+describe("Configuraciones", () => {
+	it("muestra los valores, rechaza una inactividad mayor a la duración y guarda los cambios", async () => {
+		const user = userEvent.setup();
+		const { adapter } = renderApp("/admin/configuraciones", EMAILS.admin);
+		const idle = await screen.findByLabelText(/Cierre por inactividad/);
+		expect(idle).toHaveValue("60");
+		expect(screen.getByLabelText(/Duración máxima de la sesión/)).toHaveValue("720");
+
+		await user.clear(idle);
+		await user.type(idle, "800");
+		await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+		expect(await screen.findByText("No puede superar la duración máxima de la sesión.")).toBeInTheDocument();
+
+		await user.clear(idle);
+		await user.type(idle, "45");
+		await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+		expect(await screen.findByText("Configuraciones guardadas.")).toBeInTheDocument();
+		expect((await adapter.listSettings()).find((s) => s.key === "session.idleMinutes")?.value).toBe(45);
+	});
+
+	it("sin manage_settings la sección no se ofrece", async () => {
+		renderApp("/admin/configuraciones", EMAILS.analyst);
+		expect(await screen.findByText("No tiene permiso para ver esta sección")).toBeInTheDocument();
+		expect(screen.queryByRole("link", { name: "Configuraciones" })).not.toBeInTheDocument();
+	});
+});
+
+describe("Actividad de sesión", () => {
+	const touches = (adapter: { touchSession: () => Promise<void> }) => vi.spyOn(adapter, "touchSession");
+
+	it("el uso real avisa al servidor, con un máximo de un aviso por minuto", async () => {
+		const { adapter } = renderApp("/perfil", EMAILS.admin);
+		await screen.findByRole("heading", { name: /Perfil/ });
+		const spy = touches(adapter);
+		const now = vi.spyOn(Date, "now");
+		now.mockReturnValue(1_000_000);
+		fireEvent.keyDown(window);
+		fireEvent.pointerDown(window);
+		fireEvent.scroll(window);
+		expect(spy).toHaveBeenCalledTimes(1);
+		now.mockReturnValue(1_000_000 + 59_000);
+		fireEvent.keyDown(window);
+		expect(spy).toHaveBeenCalledTimes(1);
+		now.mockReturnValue(1_000_000 + 61_000);
+		fireEvent.keyDown(window);
+		expect(spy).toHaveBeenCalledTimes(2);
+		now.mockRestore();
+	});
+
+	it("sin sesión no se avisa nada", async () => {
+		const { adapter } = renderApp("/login", null);
+		await screen.findByRole("heading", { name: "Ingresar" });
+		const spy = touches(adapter);
+		fireEvent.keyDown(window);
+		fireEvent.pointerDown(window);
+		expect(spy).not.toHaveBeenCalled();
+	});
+
+	it("los sondeos en segundo plano no cuentan como actividad", async () => {
+		const { adapter } = renderApp("/admin/actividad", EMAILS.admin);
+		const spy = touches(adapter);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(spy).not.toHaveBeenCalled();
 	});
 });

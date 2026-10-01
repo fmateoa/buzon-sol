@@ -3,7 +3,9 @@ import { Inject, Injectable } from "@nestjs/common";
 import argon2 from "argon2";
 import { DataSource, EntityManager } from "typeorm";
 import { AppError, PERMISSIONS, type Permission } from "@buzon-sol/domain";
+import { RUN_STATUS_COLUMNS, RUN_STATUS_JOINS } from "./run-status";
 import { AuthService, DB, normalizeEmail, type Principal } from "./auth";
+import { SettingsService } from "./settings";
 
 type RoleInput = { name?: unknown; permissions?: unknown; allAccounts?: unknown; accountIds?: unknown };
 type UserInput = { name?: unknown; email?: unknown; password?: unknown; roleId?: unknown };
@@ -37,17 +39,37 @@ async function audit(manager: EntityManager, actor: Principal, action: string, o
 
 @Injectable()
 export class IdentityService {
-  constructor(@Inject(DB) private readonly db: DataSource, @Inject(AuthService) private readonly auth: AuthService) {}
+  constructor(@Inject(DB) private readonly db: DataSource, @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(SettingsService) private readonly settings: SettingsService) {}
 
-  async visibleAccounts(actor: Principal): Promise<{ id: string; alias: string; active: boolean }[]> {
+  async visibleAccounts(actor: Principal) {
     this.auth.requirePermission(actor, "view_mailbox");
     return this.db.query(
-      `SELECT a.id,a.alias,a.active FROM sunat_accounts a
+      `SELECT a.id,a.alias,a.active,a.ruc_masked AS rucMasked,
+         COALESCE(s.state,'disabled') AS scheduleState,s.pause_reason AS pauseReason,s.next_run_at AS nextRunAt,
+         ${RUN_STATUS_COLUMNS}
+       FROM sunat_accounts a LEFT JOIN sync_schedules s ON s.account_id=a.id ${RUN_STATUS_JOINS}
        WHERE (?=true OR EXISTS
          (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=? AND ra.account_id=a.id))
        ORDER BY a.alias`,
       [actor.allAccounts, actor.roleId],
     );
+  }
+
+  /** Alias only: lets whoever assigns accounts to roles pick them without seeing account data. */
+  async accountOptions(actor: Principal): Promise<{ id: string; alias: string }[]> {
+    if (!actor.permissions.includes("manage_users_roles") && !actor.permissions.includes("manage_accounts")) throw new AppError("forbidden");
+    return this.db.query("SELECT id,alias FROM sunat_accounts ORDER BY alias");
+  }
+
+  async setReadWarning(actor: Principal, enabled: unknown): Promise<void> {
+    if (typeof enabled !== "boolean") throw new AppError("validation");
+    await this.db.transaction(async (manager) => {
+      await manager.query("UPDATE app_users SET read_warning_enabled=? WHERE id=?", [enabled, actor.id]);
+      await manager.query(
+        "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?)",
+        [randomUUID(), actor.id, "preference", "preference", actor.id, JSON.stringify({ readWarningEnabled: enabled })]);
+    });
   }
 
   async setReviewed(actor: Principal, accountId: string, itemId: string, reviewed: unknown): Promise<void> {
@@ -125,7 +147,8 @@ export class IdentityService {
     const name = validName(input.name);
     const email = normalizeEmail(input.email);
     const roleId = validId(input.roleId);
-    if (typeof input.password !== "string" || input.password.length < 12 || input.password.length > 1024) throw new AppError("validation");
+    const minLength = await this.settings.get("security.passwordMinLength");
+    if (typeof input.password !== "string" || input.password.length < minLength || input.password.length > 1024) throw new AppError("validation");
     const hash = await argon2.hash(input.password, { type: argon2.argon2id });
     const id = randomUUID();
     await this.db.transaction(async (manager) => {
@@ -166,20 +189,26 @@ export class IdentityService {
     });
   }
 
-  async listUsers(actor: Principal): Promise<{ id: string; email: string; name: string; status: string; roleId: string }[]> {
+  async listUsers(actor: Principal) {
     this.auth.requirePermission(actor, "manage_users_roles");
-    return this.db.query("SELECT id,email,name,status,role_id AS roleId FROM app_users ORDER BY name");
+    return this.db.query(
+      `SELECT u.id,u.email,u.name,u.status,u.role_id AS roleId,r.name AS roleName,
+         (SELECT MAX(s.created_at) FROM app_sessions s WHERE s.user_id=u.id) AS lastLoginAt
+       FROM app_users u JOIN roles r ON r.id=u.role_id ORDER BY u.name`);
   }
 
-  async listRoles(actor: Principal): Promise<{ id: string; name: string; allAccounts: boolean; permissions: Permission[]; accountIds: string[] }[]> {
+  async listRoles(actor: Principal): Promise<{ id: string; name: string; allAccounts: boolean; permissions: Permission[]; accountIds: string[]; userCount: number }[]> {
     this.auth.requirePermission(actor, "manage_users_roles");
-    const roles: { id: string; name: string; allAccounts: number }[] = await this.db.query("SELECT id,name,all_accounts AS allAccounts FROM roles ORDER BY name");
+    const roles: { id: string; name: string; allAccounts: number; userCount: number }[] = await this.db.query(
+      `SELECT r.id,r.name,r.all_accounts AS allAccounts,
+         (SELECT COUNT(*) FROM app_users u WHERE u.role_id=r.id AND u.status<>'disabled') AS userCount
+       FROM roles r ORDER BY r.name`);
     return Promise.all(roles.map(async (role) => {
       const [permissions, accounts]: [{ permission: Permission }[], { account_id: string }[]] = await Promise.all([
         this.db.query("SELECT permission FROM role_permissions WHERE role_id=?", [role.id]),
         this.db.query("SELECT account_id FROM role_sunat_accounts WHERE role_id=?", [role.id]),
       ]);
-      return { id: role.id, name: role.name, allAccounts: Boolean(role.allAccounts),
+      return { id: role.id, name: role.name, allAccounts: Boolean(role.allAccounts), userCount: Number(role.userCount),
         permissions: permissions.map((p) => p.permission), accountIds: accounts.map((a) => a.account_id) };
     }));
   }

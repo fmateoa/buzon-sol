@@ -1,15 +1,13 @@
-import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
-import sanitizeHtml from "sanitize-html";
 import { AppError, type MailBox } from "@buzon-sol/domain";
+import { storeDetail, type DetailFile } from "./detail-store.js";
 
 export interface ReadClient {
   readDetail(box: MailBox, codMensaje: string): Promise<{
     body: string;
     indTexto?: string | null;
     updateLeido: boolean | null;
-    files?: { kind: "attachment" | "generated_document"; codArchivo: number | string | null;
-      numId?: string | null; name?: string | null }[];
+    files?: DetailFile[];
   }>;
   observeState(box: MailBox, codMensaje: string): Promise<number | null>;
   close?(): Promise<void>;
@@ -55,12 +53,6 @@ export class ReadProcessor {
       const box: MailBox = event.tipo_msj === 1 ? "messages" : "notifications";
       try {
         const detail = await this.client.readDetail(box, event.cod_mensaje);
-        const safeBody = detail.indTexto === "3" ? `<pre>${escapeHtml(normalizeJson(detail.body))}</pre>` :
-          detail.indTexto && detail.indTexto !== "1" ? `<pre>${escapeHtml(detail.body)}</pre>` :
-            sanitizeHtml(detail.body, {
-              allowedTags: ["p", "br", "b", "strong", "i", "em", "u", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "a", "div", "span"],
-              allowedAttributes: {},
-            });
         let observed: number | null = null;
         for (let attempt = 0; attempt < 4; attempt++) {
           try { observed = await this.client.observeState(box, event.cod_mensaje); }
@@ -69,22 +61,7 @@ export class ReadProcessor {
           if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
         await this.db.transaction(async (manager) => {
-          await manager.query(
-            `INSERT INTO mail_details (item_id,account_id,original_body,safe_body)
-             VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE original_body=VALUES(original_body),safe_body=VALUES(safe_body),fetched_at=UTC_TIMESTAMP(6)`,
-            [event.item_id, accountId, detail.body, safeBody],
-          );
-          for (const [position, file] of (detail.files ?? []).entries()) {
-            await manager.query(
-              `INSERT INTO file_assets
-               (id,item_id,account_id,kind,position_index,cod_archivo,num_id,original_name,state)
-               VALUES (?,?,?,?,?,?,?,?,?)
-               ON DUPLICATE KEY UPDATE cod_archivo=VALUES(cod_archivo),num_id=VALUES(num_id),original_name=VALUES(original_name)`,
-              [randomUUID(), event.item_id, accountId, file.kind, position,
-                file.codArchivo === null ? null : String(file.codArchivo), file.numId ?? null,
-                file.name ?? null, "available"],
-            );
-          }
+          await storeDetail(manager, accountId, event.item_id, detail);
           if (observed !== null) await manager.query(
             "UPDATE mail_items SET ind_estado=? WHERE id=? AND account_id=?", [observed, event.item_id, accountId]);
           await manager.query(
@@ -101,14 +78,4 @@ export class ReadProcessor {
       await lease.release();
     }
   }
-}
-
-function normalizeJson(body: string): string {
-  try { return JSON.stringify(JSON.parse(body), null, 2); }
-  catch { return body; }
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;",
-    '"': "&quot;", "'": "&#39;" })[char]!);
 }

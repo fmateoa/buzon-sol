@@ -47,27 +47,47 @@ function arrayLiteral(source: string, start: number): string | null {
   return null;
 }
 
+const simpleEscapes: Record<string, string> = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", "0": "\0" };
+
+/** Decodes the escapes of a single-quoted JavaScript string literal without evaluating it. */
+function unescapeJsString(value: string): string {
+  return value.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (_, escape: string) =>
+    escape.length > 1 ? String.fromCharCode(parseInt(escape.slice(1), 16)) : simpleEscapes[escape] ?? escape);
+}
+
+/** `#rrggbb` (or 3/4/8 digits), also accepted without the `#`; anything else is no color. */
+function labelColor(value: unknown): string | null {
+  const match = typeof value === "string" ? /^#?([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim()) : null;
+  return match ? `#${match[1]!.toLowerCase()}` : null;
+}
+
 /**
  * `listEtiquetas` is embedded in the `/visor/master` HTML (no separate endpoint observed). The HTML is treated as
- * data and its scripts are never executed. Only a strict JSON array literal is accepted; anything else is
- * `schema_changed`, so the caller marks the catalog unavailable while the inventory continues.
- * The exact embedding is pending S-11; the fixture is invented.
+ * data and its scripts are never executed. Observed with real accounts (S-11): `var listEtiquetas =
+ * $.parseJSON('[...]')`; a bare JSON array literal is also accepted. Anything else is `schema_changed`, so the
+ * caller marks the catalog unavailable while the inventory continues.
  */
 export function parseLabels(response: PageResponse): SunatLabel[] {
   if (!response.contentType.toLowerCase().includes("text/html")) throw new AppError("schema_changed");
-  const match = /\blistEtiquetas\s*[=:]\s*\[/.exec(response.body);
-  if (!match) throw new AppError("schema_changed");
-  const literal = arrayLiteral(response.body, match.index + match[0].length - 1);
-  if (!literal) throw new AppError("schema_changed");
+  const quoted = /\blistEtiquetas\s*=\s*\$\.parseJSON\(\s*'((?:\\[\s\S]|[^'\\])*)'\s*\)/.exec(response.body)?.[1];
+  const candidates: string[] = [];
+  if (quoted !== undefined) candidates.push(quoted, unescapeJsString(quoted));
+  else {
+    const match = /\blistEtiquetas\s*[=:]\s*\[/.exec(response.body);
+    const literal = match ? arrayLiteral(response.body, match.index + match[0].length - 1) : null;
+    if (literal) candidates.push(literal);
+  }
   let data: unknown;
-  try { data = JSON.parse(literal); }
-  catch { throw new AppError("schema_changed"); }
+  for (const candidate of candidates) {
+    try { data = JSON.parse(candidate); break; }
+    catch { /* The next decoding is tried; if none parses it is a schema change. */ }
+  }
   if (!Array.isArray(data)) throw new AppError("schema_changed");
   return data.map((entry) => {
     const row = (entry ?? {}) as Record<string, unknown>;
     const labelCode = code(row.codEtiqueta), labelName = name(row.descEtiqueta);
     if (!labelCode || !labelName) throw new AppError("schema_changed");
-    const color = typeof row.colorEtiqueta === "string" && /^#[0-9a-f]{3,8}$/i.test(row.colorEtiqueta) ? row.colorEtiqueta : null;
+    const color = labelColor(row.colorEtiqueta);
     return { code: labelCode, name: labelName, color, messageCount: count(row.cantEtiqueta) };
   });
 }

@@ -20,9 +20,12 @@ import type {
 	AdminAccount,
 	AppSession,
 	AppUser,
+	ArchiveRun,
+	ArchiveStatus,
 	AuditEntry,
 	AuditFilters,
 	BoxSummary,
+	BulkInventoryResult,
 	ConnectionStatus,
 	FileId,
 	InventoryRun,
@@ -36,6 +39,10 @@ import type {
 	MailListFilters,
 	MailPage,
 	MailSortColumn,
+	MailboxSettings,
+	AppSetting,
+	IsoDateTime,
+	SettingValues,
 	MailboxSummary,
 	Page,
 	PendingIssue,
@@ -45,12 +52,13 @@ import type {
 	RolePermissions,
 	RunId,
 	ScheduleConfig,
-	SortDirection,
 	SunatFolder,
 	SunatTag,
 	UserId,
 	VisibleAccount,
 } from "@/domain/types";
+import { SETTING_KEYS } from "@/domain/types";
+import { compare, paginate } from "@/adapters/paging";
 import { formatCount, limaDayKey } from "@/lib/format";
 import { includesNormalized, normalizeText } from "@/lib/text";
 import { SUNAT_GATES } from "@/lib/sunat-gates";
@@ -67,6 +75,7 @@ import {
 	TAGS,
 	UNKNOWN_TAG,
 	USERS,
+	SETTING_DEFINITIONS,
 	type AccountRecord,
 	type ItemRecord,
 	type RoleRecord,
@@ -101,18 +110,6 @@ const fail = <T>(error: unknown): CommandResult<T> => ({
 	error: error instanceof AppError ? error : new AppError("remote_unavailable", String(error)),
 });
 
-const compare = (a: string | number, b: string | number, direction: SortDirection) => {
-	const result = typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b), "es-PE", { sensitivity: "base" });
-	return direction === "asc" ? result : -result;
-};
-
-const paginate = <T>(rows: T[], page: number, pageSize: number): Page<T> => {
-	const safeSize = Math.max(1, pageSize);
-	const lastPage = Math.max(1, Math.ceil(rows.length / safeSize));
-	const safePage = Math.min(Math.max(1, page), lastPage);
-	return { rows: rows.slice((safePage - 1) * safeSize, safePage * safeSize), total: rows.length, page: safePage, pageSize: safeSize };
-};
-
 const maskRuc = (ruc: string) => `${ruc.slice(0, 2)}•••••••${ruc.slice(-2)}`;
 const maskSolUser = (user: string | null) => (user ? `${user.slice(0, 4)}•••${user.slice(-1)}` : null);
 
@@ -125,6 +122,7 @@ const safeStorage = (): LocalAdapterOptions["storage"] => {
 };
 
 export class LocalAdapter implements BuzonAdapter {
+	readonly userOnboarding = "invitation" as const;
 	readonly stats: LocalAdapterStats = { remoteDetailCalls: 0, readContentCalls: 0, readIntents: [], downloads: 0 };
 
 	private readonly latencyMs: number;
@@ -137,11 +135,15 @@ export class LocalAdapter implements BuzonAdapter {
 	private users: UserRecord[] = USERS.map((u) => ({ ...u }));
 	private roles: RoleRecord[] = ROLES.map((r) => ({ ...r, permissions: [...r.permissions], accountIds: [...r.accountIds] }));
 	private audit: AuditEntry[] = buildAudit();
+	private settingValues = Object.fromEntries(SETTING_KEYS.map((key) => [key, SETTING_DEFINITIONS[key].default])) as SettingValues;
+	private settingsUpdatedAt: IsoDateTime | null = null;
 	private reviews = new Map<string, LocalReviewState>();
 	private opened = new Set<string>();
 	private readResults = new Map<string, MailDetail>();
 	private fileStates = new Map<FileId, MailFile["state"]>();
 	private downloadAttempts = new Map<FileId, number>();
+	private mailboxSettings = new Map<AccountId, MailboxSettings>();
+	private archiveRuns = new Map<AccountId, ArchiveRun[]>();
 	private timers = new Set<ReturnType<typeof setTimeout>>();
 	private currentUserId: UserId | null = null;
 	private seq = 1;
@@ -310,6 +312,7 @@ export class LocalAdapter implements BuzonAdapter {
 			permissions: [...role.permissions],
 			visibleAccounts: this.visibleAccountsFor(role, user),
 			preferences: { readWarningEnabled: user.readWarningEnabled, readWarningChangedAt: user.readWarningChangedAt },
+			passwordMinLength: this.settingValues["security.passwordMinLength"],
 		};
 	}
 
@@ -717,6 +720,101 @@ export class LocalAdapter implements BuzonAdapter {
 		}
 	}
 
+	// ─── Archivo de la cuenta ────────────────────────────────────────────────
+
+	private settingsOf(accountId: AccountId): MailboxSettings {
+		return this.mailboxSettings.get(accountId) ?? { accountId, archiveContent: false, archiveFiles: false, archiveBatchSize: 200 };
+	}
+
+	private archiveStatusOf(accountId: AccountId): ArchiveStatus {
+		const items = this.itemsOf(accountId);
+		const read = items.filter((i) => i.remoteState !== "unread");
+		const files = items.flatMap((i) => i.files.map((f) => this.fileState(f).state.status));
+		const history = this.archiveRuns.get(accountId) ?? [];
+		return {
+			accountId,
+			settings: this.settingsOf(accountId),
+			items: { total: items.length, readInSunat: read.length, unreadInSunat: items.length - read.length, withContent: items.filter((i) => i.storedBody !== null).length, pendingContent: read.filter((i) => i.storedBody === null).length },
+			files: { stored: files.filter((s) => s === "stored").length, pending: files.filter((s) => s === "available" || s === "downloading").length, failed: files.filter((s) => s === "failed").length },
+			current: history[0] ?? null,
+			history,
+		};
+	}
+
+	async getArchiveStatus(accountId: AccountId): Promise<ArchiveStatus> {
+		await this.wait();
+		this.requireAccount(accountId, "view_mailbox");
+		return this.archiveStatusOf(accountId);
+	}
+
+	/** Un lote simulado: guarda contenido solo de elementos ya leídos; un no leído nunca se abre aquí. */
+	async startArchive(accountId: AccountId, _retryFailed: boolean): Promise<CommandResult<ArchiveStatus>> {
+		await this.wait();
+		try {
+			const { account, user } = this.requireAccount(accountId, "run_inventory");
+			this.requireAccount(accountId, "read_content");
+			const settings = this.settingsOf(accountId);
+			if (!settings.archiveContent) throw new AppError("paused");
+			this.assertRemoteAvailable(account);
+			const batch = this.itemsOf(accountId).filter((i) => i.remoteState !== "unread" && i.storedBody === null).slice(0, settings.archiveBatchSize);
+			let filesStored = 0;
+			for (const item of batch) {
+				item.storedBody = sampleBody(item.subject);
+				if (!settings.archiveFiles) continue;
+				for (const file of item.files) {
+					this.fileStates.set(file.id, { status: "stored", storedAt: this.now() });
+					filesStored++;
+				}
+			}
+			const now = this.now();
+			const run: ArchiveRun = { id: this.nextId("arc"), trigger: "manual", state: "complete", errorCode: null, itemsDone: batch.length, itemsFailed: 0, filesStored, filesFailed: 0, remaining: this.archiveStatusOf(accountId).items.pendingContent, startedAt: now, finishedAt: now };
+			this.archiveRuns.set(accountId, [run, ...(this.archiveRuns.get(accountId) ?? [])]);
+			this.addAudit({ actor: user.name, action: "inventory", objectLabel: account.alias, objectType: "account", change: `Archivo solicitado · ${batch.length} elementos ya leídos` });
+			return ok(this.archiveStatusOf(accountId));
+		} catch (error) {
+			return fail(error);
+		}
+	}
+
+	async getMailboxSettings(accountId: AccountId): Promise<MailboxSettings> {
+		await this.wait();
+		this.requirePermission("manage_accounts");
+		if (!this.accounts.some((a) => a.id === accountId)) throw new AppError("not_found");
+		return this.settingsOf(accountId);
+	}
+
+	async saveMailboxSettings(settings: MailboxSettings): Promise<CommandResult<MailboxSettings>> {
+		await this.wait();
+		try {
+			this.requirePermission("manage_accounts");
+			const account = this.accounts.find((a) => a.id === settings.accountId);
+			if (!account) throw new AppError("not_found");
+			if (!Number.isInteger(settings.archiveBatchSize) || settings.archiveBatchSize < 1 || settings.archiveBatchSize > 2000) {
+				throw new AppError("validation", "Tamaño de lote inválido", { archiveBatchSize: "Use un número entre 1 y 2000." });
+			}
+			if (settings.archiveFiles && !settings.archiveContent) throw new AppError("validation", "Los archivos exigen guardar el contenido");
+			this.mailboxSettings.set(settings.accountId, { ...settings });
+			this.addAudit({ action: "update", objectLabel: account.alias, objectType: "account", change: "Archivo de la cuenta actualizado" });
+			return ok(this.settingsOf(settings.accountId));
+		} catch (error) {
+			return fail(error);
+		}
+	}
+
+	async startAllInventories(): Promise<CommandResult<BulkInventoryResult[]>> {
+		try {
+			const { role } = this.requirePermission("run_inventory");
+			const results: BulkInventoryResult[] = [];
+			for (const account of this.accounts.filter((a) => a.active && this.roleSeesAccount(role, a.id))) {
+				const started = await this.startInventory(account.id);
+				results.push({ accountId: account.id, alias: account.alias, started: started.ok, errorCode: started.ok ? null : started.error.code });
+			}
+			return ok(results);
+		} catch (error) {
+			return fail(error);
+		}
+	}
+
 	// ─── Administración de cuentas ───────────────────────────────────────────
 
 	private toAdminAccount(account: AccountRecord): AdminAccount {
@@ -1105,4 +1203,41 @@ export class LocalAdapter implements BuzonAdapter {
 			return fail(error);
 		}
 	}
+
+	private settingsList(): AppSetting[] {
+		return SETTING_KEYS.map((key) => ({ key, value: this.settingValues[key], ...SETTING_DEFINITIONS[key], updatedAt: this.settingsUpdatedAt }));
+	}
+
+	async listSettings(): Promise<AppSetting[]> {
+		await this.wait();
+		this.requirePermission("manage_settings");
+		return this.settingsList();
+	}
+
+	async saveSettings(values: Partial<SettingValues>): Promise<CommandResult<AppSetting[]>> {
+		await this.wait();
+		try {
+			this.requirePermission("manage_settings");
+			const next = { ...this.settingValues, ...values };
+			const fields: Record<string, string> = {};
+			for (const key of SETTING_KEYS) {
+				const { min, max } = SETTING_DEFINITIONS[key];
+				if (!Number.isInteger(next[key]) || next[key] < min || next[key] > max) fields[key] = `Use un número entre ${min} y ${max}.`;
+			}
+			if (!fields["session.idleMinutes"] && next["session.idleMinutes"] > next["session.absoluteMinutes"]) fields["session.idleMinutes"] = "No puede superar la duración máxima.";
+			if (Object.keys(fields).length) throw new AppError("validation", "Configuración inválida", fields);
+			const changed = SETTING_KEYS.filter((key) => next[key] !== this.settingValues[key]);
+			if (changed.length) {
+				this.settingValues = next;
+				this.settingsUpdatedAt = this.now();
+				this.addAudit({ action: "update", objectLabel: "Configuraciones", objectType: "settings", change: `Configuraciones actualizadas (${changed.length})` });
+			}
+			return ok(this.settingsList());
+		} catch (error) {
+			return fail(error);
+		}
+	}
+
+	/** El prototipo no vence la sesión por inactividad. */
+	async touchSession(): Promise<void> {}
 }

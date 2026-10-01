@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { Queue } from "bullmq";
-import { AppError, READ_QUEUE, redisApiOptions, type ReadJob } from "@buzon-sol/domain";
+import { AppError, READ_QUEUE, redisApiOptions, renderStructuredBody, type ReadJob } from "@buzon-sol/domain";
 import { AuthService, DB, type Principal } from "./auth";
 import { validId } from "./identity";
 
@@ -39,7 +39,8 @@ export class ReadingService {
       const queue = new Queue<ReadJob>(READ_QUEUE, { connection: redisApiOptions() });
       try {
         await queue.add("read", { accountId, eventId: event.id },
-          { jobId: event.id, attempts: 1, removeOnComplete: true, removeOnFail: true });
+          // Retries only cover a busy account lock: the processor never repeats a remote call for one event.
+          { jobId: event.id, attempts: 6, backoff: { type: "fixed", delay: 5_000 }, removeOnComplete: true, removeOnFail: true });
       } catch {
         throw new AppError("remote_unavailable");
       } finally {
@@ -49,15 +50,28 @@ export class ReadingService {
     return event;
   }
 
+  /** Progress of one explicit read; the body itself is served by `getDetail` once it is `complete`. */
+  async readStatus(actor: Principal, accountId: string, itemId: string, eventId: string) {
+    this.auth.requireAccount(actor, "read_content", validId(accountId));
+    const rows: { id: string; status: string; remoteBefore: number | null; remoteAfter: number | null; updateLeido: number | null }[] =
+      await this.db.query(
+        `SELECT id,status,remote_before AS remoteBefore,remote_after AS remoteAfter,update_leido AS updateLeido
+         FROM mail_read_events WHERE id=? AND item_id=? AND account_id=?`, [validId(eventId), validId(itemId), accountId]);
+    if (!rows.length) throw new AppError("not_found");
+    return { ...rows[0], updateLeido: rows[0].updateLeido === null ? null : Number(rows[0].updateLeido) === 1 };
+  }
+
   async getDetail(actor: Principal, accountId: string, itemId: string) {
     this.auth.requireAccount(actor, "read_content", validId(accountId));
     validId(itemId);
-    const rows: { safe_body: string; fetched_at: Date }[] = await this.db.query(
-      "SELECT d.safe_body,d.fetched_at FROM mail_details d WHERE d.item_id=? AND d.account_id=?", [itemId, accountId]);
+    const rows: { safe_body: string; original_body: string | null; ind_texto: string | null; fetched_at: Date }[] = await this.db.query(
+      "SELECT d.safe_body,d.original_body,d.ind_texto,d.fetched_at FROM mail_details d WHERE d.item_id=? AND d.account_id=?", [itemId, accountId]);
     if (!rows.length) throw new AppError("not_found");
     const files = await this.db.query(
       `SELECT id,kind,original_name AS name,mime_type AS mimeType,size_bytes AS sizeBytes,state
        FROM file_assets WHERE item_id=? AND account_id=? ORDER BY kind,position_index`, [itemId, accountId]);
-    return { itemId, accountId, bodyHtml: rows[0].safe_body, fetchedAt: rows[0].fetched_at, files };
+    // A JSON body is rendered from the stored original, so details saved before a rendering change read the same way.
+    const structured = rows[0].ind_texto === "3" && rows[0].original_body ? renderStructuredBody(rows[0].original_body) : null;
+    return { itemId, accountId, bodyHtml: structured ?? rows[0].safe_body, fetchedAt: rows[0].fetched_at, files };
   }
 }

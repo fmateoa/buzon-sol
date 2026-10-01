@@ -9,7 +9,7 @@ export const PageHeader = ({ title, description, actions, back, className }: { t
 			<h1 className="text-xl font-bold tracking-tight text-ink md:text-2xl">{title}</h1>
 			{description && <div className="mt-1 text-sm text-muted-ink">{description}</div>}
 		</div>
-		{actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+		{actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
 	</header>
 );
 

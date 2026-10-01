@@ -33,6 +33,8 @@ const ACTIONS: Record<AuditAction, { icon: string; label: string; className: str
 	credential: { icon: "✎", label: "Credencial", className: "text-brand bg-brand-soft" },
 	test: { icon: "!", label: "Prueba de conexión", className: "text-effect-ink bg-effect-soft" },
 	failure: { icon: "×", label: "Fallo", className: "text-err bg-err-soft" },
+	session: { icon: "→", label: "Sesión", className: "text-brand bg-brand-soft" },
+	inventory: { icon: "↻", label: "Consulta", className: "text-brand bg-brand-soft" },
 };
 
 const OBJECT_TYPES: { value: AuditFilters["objectType"]; label: string }[] = [
@@ -45,6 +47,8 @@ const OBJECT_TYPES: { value: AuditFilters["objectType"]; label: string }[] = [
 	{ value: "preference", label: "Preferencia" },
 	{ value: "item", label: "Elemento del buzón" },
 	{ value: "file", label: "Archivo" },
+	{ value: "run", label: "Consulta de inventario" },
+	{ value: "settings", label: "Configuraciones" },
 ];
 
 /** Marca de orden de bytes para que las hojas de cálculo lean UTF-8. */
@@ -57,6 +61,8 @@ export const AuditPage = () => {
 	const state = useListState<AuditFilters, AuditSortColumn>({ persistKey: "admin-auditoria-v1", initialFilters: INITIAL, initialPageSize: 20 });
 	const audit = useAudit(state.request);
 	const exportCsv = useExportAudit();
+	// Con la API, las personas salen de los eventos cargados; el prototipo usa su lista ficticia.
+	const actors = import.meta.env.VITE_DATA_SOURCE === "backend" ? [...new Set([...(audit.data?.rows ?? []).map((e) => e.actor), ...(state.filters.actor === "all" ? [] : [state.filters.actor])])].sort() : ACTORS;
 
 	const download = async () => {
 		const csv = await exportCsv.mutateAsync(state.appliedFilters).catch(() => null);
@@ -115,7 +121,7 @@ export const AuditPage = () => {
 								/>
 							);
 						case "actor":
-							return <FilterSelect label="Realizado por" value={state.filters.actor} onChange={(v) => state.setFilter("actor", v)} options={[{ value: "all", label: "Todos" }, ...ACTORS.map((a) => ({ value: a, label: a }))]} />;
+							return <FilterSelect label="Realizado por" value={state.filters.actor} onChange={(v) => state.setFilter("actor", v)} options={[{ value: "all", label: "Todos" }, ...actors.map((a) => ({ value: a, label: a }))]} />;
 						case "action":
 							return <FilterSelect label="Acción" value={state.filters.action} onChange={(v) => state.setFilter("action", v as AuditFilters["action"])} options={[{ value: "all", label: "Todas" }, ...Object.entries(ACTIONS).map(([k, v]) => ({ value: k, label: v.label }))]} />;
 						case "object":

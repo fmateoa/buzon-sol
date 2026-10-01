@@ -1,11 +1,11 @@
-// Writes .env.dev with random local-only secrets for compose.dev.yml. Refuses to overwrite an existing file.
+// Writes apps/api/.env with random local-only secrets for compose.dev.yml. Refuses to overwrite an existing file.
 // Nothing here is a real SUNAT credential; SOL secrets are entered later through the API.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 
-const target = new URL("../.env.dev", import.meta.url);
+const target = new URL("../apps/api/.env", import.meta.url);
 if (existsSync(target)) {
-  console.error(".env.dev already exists; delete it first to regenerate local secrets.");
+  console.error("apps/api/.env already exists; delete it first to regenerate local secrets.");
   process.exit(1);
 }
 const secret = () => randomBytes(24).toString("base64url");
@@ -22,4 +22,4 @@ const lines = {
   ACCOUNT_FINGERPRINT_KEY_B64: randomBytes(32).toString("base64"),
 };
 writeFileSync(target, Object.entries(lines).map(([key, value]) => `${key}=${value}`).join("\n") + "\n", { mode: 0o600 });
-console.log("Wrote .env.dev with local development secrets.");
+console.log("Wrote apps/api/.env with local development secrets.");
