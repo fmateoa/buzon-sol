@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { PERMISSIONS } from "@buzon-sol/domain";
 import dataSource from "./db/data-source";
-import { normalizeEmail } from "./auth";
+import { normalizeEmail } from "./auth/auth";
 
 async function main(): Promise<void> {
   const email = normalizeEmail(process.env.BOOTSTRAP_EMAIL);

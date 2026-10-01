@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
-import { Queue } from "bullmq";
-import { AppError, FILE_QUEUE, redisApiOptions, type FileJob } from "@buzon-sol/domain";
+import { addJob } from "../common/job-queue";
+import { AppError, FILE_QUEUE, type FileJob } from "@buzon-sol/domain";
 import { S3Storage } from "@buzon-sol/storage";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 const extensions: Record<string, string> = {
   "application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "application/zip": "zip",
@@ -43,23 +45,18 @@ export class FilesService {
       await manager.query(
         "INSERT INTO file_fetches (id,file_id,account_id,actor_user_id,status) VALUES (?,?,?,?,'pending')",
         [id, fileId, accountId, actor.id]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "fetch_file", "file", fileId]);
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "fetch_file", objectType: "file", objectId: fileId });
       return { id, status: "pending" };
     });
     if (fetch.status === "stored") return fetch;
-    const queue = new Queue<FileJob>(FILE_QUEUE, { connection: redisApiOptions() });
     try {
-      await queue.add("file", { accountId, fetchId: fetch.id },
+      await addJob<FileJob>(FILE_QUEUE, "file", { accountId, fetchId: fetch.id },
         { jobId: fetch.id, attempts: 1, removeOnComplete: true, removeOnFail: true });
     } catch {
       await this.db.query(
         "UPDATE file_fetches SET status='failed',error_code='remote_unavailable',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND status='pending'",
         [fetch.id]);
       throw new AppError("remote_unavailable");
-    } finally {
-      await queue.close();
     }
     return fetch;
   }
@@ -89,10 +86,7 @@ export class FilesService {
     try { stream = await new S3Storage().get(asset.object_key); }
     catch { throw new AppError("storage_unavailable"); }
     try {
-      await this.db.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "download", "file", fileId],
-      );
+      await recordAudit(this.db, { actorId: actor.id, accountId, action: "download", objectType: "file", objectId: fileId });
     } catch (error) {
       stream.destroy();
       throw error;

@@ -6,6 +6,7 @@ import {
 } from "@buzon-sol/sunat-adapter";
 import { DataSource, EntityManager } from "typeorm";
 import { noticeAdmins, noticeMailboxViewers } from "./notices.js";
+import { tryAccountLock } from "./account-lock.js";
 
 const boxCode: Record<MailBox, number> = { messages: 1, notifications: 2 };
 const ALL_BOXES: MailBox[] = ["messages", "notifications"];
@@ -44,16 +45,11 @@ export class InventoryRunner {
 
   async run(accountId: string, runId: string, maxPages = 500, maxReauth = 2): Promise<void> {
     // A connection-scoped MySQL lock survives page transactions and is released on process death.
-    const lease = this.db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${accountId}`;
     const startedAt = Date.now();
-    let locked = false;
     let reauths = 0;
+    const lock = await tryAccountLock(this.db, accountId);
+    if (!lock) throw new AppError("conflict_running");
     try {
-      const lock: { granted: number }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) throw new AppError("conflict_running");
-      locked = true;
       const rows: RunRow[] = await this.db.query(`SELECT r.account_id,r.state,r.resume_box,r.resume_page,r.boxes_json,a.active
         FROM sync_runs r JOIN sunat_accounts a ON a.id=r.account_id WHERE r.id=?`, [runId]);
       const run = rows[0];
@@ -80,7 +76,7 @@ export class InventoryRunner {
       await this.logFinished(accountId, runId, startedAt, reauths, null);
     } catch (error) {
       const code = error instanceof AppError ? error.code : "remote_unavailable";
-      if (locked && code !== "conflict_running") {
+      if (code !== "conflict_running") {
         await this.db.query("UPDATE sync_runs SET state='partial',error_code=? WHERE id=? AND account_id=? AND state='running'", [code, runId, accountId]);
         if (["invalid_credential", "remote_session_expired", "remote_unavailable", "schema_changed", "incomplete_inventory"].includes(code)) {
           await this.recordFailure(accountId, code);
@@ -89,8 +85,7 @@ export class InventoryRunner {
       }
       throw error;
     } finally {
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
 

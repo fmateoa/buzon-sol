@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { Queue } from "bullmq";
+import { addJob } from "../common/job-queue";
 import { DataSource } from "typeorm";
-import { AppError, CONNECTION_QUEUE, redisApiOptions, type ConnectionJob } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { AppError, CONNECTION_QUEUE, type ConnectionJob } from "@buzon-sol/domain";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 @Injectable()
 export class ConnectionService {
@@ -32,22 +34,17 @@ export class ConnectionService {
       await manager.query(
         "INSERT INTO connection_tests (id,account_id,credential_id,actor_user_id,status) VALUES (?,?,?,?,'pending')",
         [id, accountId, credentials[0].id, actor.id]);
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "test_connection", "connection_test", id]);
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "test_connection", objectType: "connection_test", objectId: id });
       return { id, status: "pending" };
     });
-    const queue = new Queue<ConnectionJob>(CONNECTION_QUEUE, { connection: redisApiOptions() });
     try {
-      await queue.add("connection", { accountId, testId: event.id },
+      await addJob<ConnectionJob>(CONNECTION_QUEUE, "connection", { accountId, testId: event.id },
         { jobId: event.id, attempts: 1, removeOnComplete: true, removeOnFail: true });
     } catch {
       await this.db.query(
         "UPDATE connection_tests SET status='failed',error_code='remote_unavailable',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND status='pending'",
         [event.id]);
       throw new AppError("remote_unavailable");
-    } finally {
-      await queue.close();
     }
     return event;
   }

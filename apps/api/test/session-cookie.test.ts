@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
-import { clearSessionCookies, cookieSessionHook, parseCookies, setSessionCookies } from "../src/session-cookie";
+import { clearSessionCookies, cookieSessionHook, parseCookies, setSessionCookies } from "../src/auth/session-cookie";
 
 const app = () => {
   const f = Fastify();

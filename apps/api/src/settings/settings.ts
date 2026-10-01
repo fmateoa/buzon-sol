@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError, SETTING_DEFINITIONS, SETTING_KEYS, type SettingKey } from "@buzon-sol/domain";
-import type { Principal } from "./auth";
-import { DB } from "./tokens";
+import type { Principal } from "../auth/auth";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
 
 const CACHE_MS = 15_000;
 
@@ -76,9 +77,7 @@ export class SettingsService {
           [key, value, actor.id]);
       }
       if (Object.keys(changes).length) {
-        await manager.query(
-          "INSERT INTO audit_events (id,actor_user_id,action,object_type,object_id,change_json) VALUES (?,?,?,?,?,?)",
-          [randomUUID(), actor.id, "update", "settings", "settings", JSON.stringify(changes)]);
+        await recordAudit(manager, { actorId: actor.id, action: "update", objectType: "settings", objectId: "settings", change: changes });
       }
     });
     this.cache = null;

@@ -1,6 +1,8 @@
 import { Queue, type Worker } from "bullmq";
 import { SunatHttpSession } from "@buzon-sol/sunat-adapter";
 import { ARCHIVE_QUEUE, INVENTORY_QUEUE, logEvent, redisOptions, type ArchiveJob, type InventoryJob } from "@buzon-sol/domain";
+import { loadWorkerConfig } from "./config.js";
+import { every } from "./loop.js";
 import { recoverOrphanArchiveRuns } from "./archive.js";
 import { startArchiveWorker } from "./archive-queue.js";
 import { startConnectionWorker } from "./connection-queue.js";
@@ -12,28 +14,6 @@ import { startReadWorker } from "./read-queue.js";
 import { recoverOrphanRuns } from "./recovery.js";
 import { dispatchDueSchedules } from "./scheduler.js";
 import { SunatFileClient } from "./sunat-file-client.js";
-
-const gate = (name: string): boolean => process.env[name] === "true";
-
-function interval(name: string, fallback: number): number {
-  const value = Number(process.env[name] ?? fallback);
-  if (!Number.isInteger(value) || value < 10_000) throw new Error(`Invalid ${name}`);
-  return value;
-}
-
-/** Runs `task` now and then every `ms`, never overlapping itself. */
-function every(ms: number, task: () => Promise<void>): () => void {
-  let running = false;
-  const tick = async () => {
-    if (running) return;
-    running = true;
-    try { await task(); }
-    finally { running = false; }
-  };
-  void tick();
-  const timer = setInterval(() => void tick(), ms);
-  return () => clearInterval(timer);
-}
 
 function waitForStop(): Promise<void> {
   return new Promise((resolve) => {
@@ -48,27 +28,20 @@ function waitForStop(): Promise<void> {
  * its own session for one account and closes it; no cookie jar outlives a job. Maintenance runs with any gate.
  */
 export async function main(): Promise<void> {
-  if (!gate("ENABLE_SUNAT_JOBS")) {
+  const config = loadWorkerConfig();
+  if (!config.enabled) {
     logEvent("info", "worker_idle");
     await waitForStop();
     return;
   }
-  const transport = gate("SUNAT_TRANSPORT_VALIDATED"), reading = gate("SUNAT_READ_VALIDATED");
-  const connection = gate("SUNAT_CONNECTION_CLIENT_READY"), files = gate("SUNAT_FILE_CLIENT_READY");
-  const cron = gate("SUNAT_CRON_VALIDATED");
-  if (!connection && !transport) throw new Error("SUNAT jobs need an explicitly validated capability");
-  if (cron && !transport) throw new Error("SUNAT cron requires validated inventory transport");
-  if (reading && !transport) throw new Error("SUNAT reading requires validated inventory transport");
-  if (files && (!reading || !transport)) throw new Error("SUNAT files require validated reading and inventory");
-  const recoveryMs = interval("RECOVERY_INTERVAL_MS", 300_000);
-  const schedulerMs = interval("SCHEDULER_INTERVAL_MS", 60_000);
+  const { connection, transport, reading, files, cron, recoveryMs, schedulerMs } = config;
 
   const db = await workerDataSource().initialize();
   const inventoryQueue = new Queue<InventoryJob>(INVENTORY_QUEUE, { connection: redisOptions() });
   const archiveQueue = new Queue<ArchiveJob>(ARCHIVE_QUEUE, { connection: redisOptions() });
   const session = async (accountId: string) => SunatHttpSession.open(await loadSolCredential(db, accountId));
   const workers: Worker[] = [];
-  const stops: (() => void)[] = [];
+  const stops: (() => Promise<void>)[] = [];
   try {
     if (connection) workers.push(startConnectionWorker(db, (credential) => SunatHttpSession.open(credential)));
     if (transport) workers.push(startInventoryWorker(db, session));
@@ -102,7 +75,8 @@ export async function main(): Promise<void> {
     logEvent("info", "worker_started", { connection, inventory: transport, reading, archive: reading, files, scheduler: cron });
     await waitForStop();
   } finally {
-    for (const stop of stops) stop();
+    // Stop the loops first (and let a pass in flight finish) so nothing uses the queues or MySQL once they close.
+    await Promise.allSettled(stops.map((stop) => stop()));
     await Promise.allSettled(workers.map((worker) => worker.close()));
     await Promise.allSettled([inventoryQueue.close(), archiveQueue.close()]);
     await db.destroy();

@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
-import { Queue } from "bullmq";
-import { AppError, READ_QUEUE, redisApiOptions, renderStructuredBody, type ReadJob } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { addJob } from "../common/job-queue";
+import { AppError, READ_QUEUE, renderStructuredBody, type ReadJob } from "@buzon-sol/domain";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
 @Injectable()
 export class ReadingService {
@@ -29,22 +31,17 @@ export class ReadingService {
          VALUES (?,?,?,?,?,'pending',?)`,
         [id, itemId, accountId, actor.id, key, items[0].ind_estado],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "read", "item", itemId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "read", objectType: "item", objectId: itemId });
       return { id, status: "pending" };
     });
     if (event.status === "pending") {
-      const queue = new Queue<ReadJob>(READ_QUEUE, { connection: redisApiOptions() });
       try {
-        await queue.add("read", { accountId, eventId: event.id },
+        await addJob<ReadJob>(READ_QUEUE, "read", { accountId, eventId: event.id },
           // Retries only cover a busy account lock: the processor never repeats a remote call for one event.
           { jobId: event.id, attempts: 6, backoff: { type: "fixed", delay: 5_000 }, removeOnComplete: true, removeOnFail: true });
       } catch {
+        // The event stays `pending`: the next request with the same key queues it again.
         throw new AppError("remote_unavailable");
-      } finally {
-        await queue.close();
       }
     }
     return event;

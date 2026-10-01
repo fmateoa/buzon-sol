@@ -1,10 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { DB } from "../common/tokens";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
+import { recordAudit } from "../common/audit";
 
-type Query = Record<string, string | undefined>;
+type QueryKey = "offset" | "limit" | "box" | "state" | "review" | "content" | "sort" | "direction" | "q" | "dateFrom" | "dateTo" | "seenAfter" | "folder" | "label";
+type Query = { [K in QueryKey]?: string };
 const boxes: Record<string, number> = { messages: 1, notifications: 2 };
 const sortColumns: Record<string, string> = {
   publishedAt: "m.published_at", subject: "m.subject_text", sender: "m.sender_text", remoteState: "m.ind_estado",
@@ -89,6 +92,23 @@ export class MailboxService {
       `SELECT ${kind === "folders" ? "folders_state" : "labels_state"} AS state FROM sync_runs
        WHERE account_id=? AND started_at IS NOT NULL ORDER BY started_at DESC,id DESC LIMIT 1`, [accountId]);
     return { accountId, items, observedAt: observed[0]?.observedAt ?? null, lastAttempt: latest[0]?.state ?? null };
+  }
+
+  async setReviewed(actor: Principal, accountId: string, itemId: string, reviewed: unknown): Promise<void> {
+    this.auth.requireAccount(actor, "mark_reviewed", validId(accountId));
+    validId(itemId);
+    if (typeof reviewed !== "boolean") throw new AppError("validation");
+    await this.db.transaction(async (manager) => {
+      const rows: { id: string }[] = await manager.query(
+        "SELECT id FROM mail_items WHERE id=? AND account_id=?", [itemId, accountId]);
+      if (!rows.length) throw new AppError("not_found");
+      await manager.query(
+        `INSERT INTO mail_reviews (user_id,item_id,account_id,reviewed,reviewed_at)
+         VALUES (?,?,?,?,UTC_TIMESTAMP(6))
+         ON DUPLICATE KEY UPDATE reviewed=VALUES(reviewed),reviewed_at=VALUES(reviewed_at)`,
+        [actor.id, itemId, accountId, reviewed]);
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "set_reviewed", objectType: "mail_item", objectId: itemId, change: { reviewed } });
+    });
   }
 
   /** Persisted metadata of one item; never contacts SUNAT or opens its detail. */

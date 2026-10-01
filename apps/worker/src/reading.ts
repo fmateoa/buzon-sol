@@ -1,6 +1,7 @@
 import { DataSource } from "typeorm";
 import { AppError, type MailBox } from "@buzon-sol/domain";
 import { storeDetail, type DetailFile } from "./detail-store.js";
+import { tryAccountLock } from "./account-lock.js";
 
 export interface ReadClient {
   readDetail(box: MailBox, codMensaje: string): Promise<{
@@ -18,14 +19,9 @@ export class ReadProcessor {
 
   /** A pending event is durable before this method can contact SUNAT. */
   async process(accountId: string, eventId: string): Promise<void> {
-    const lease = this.db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${accountId}`;
-    let locked = false;
+    const lock = await tryAccountLock(this.db, accountId);
+    if (!lock) throw new AppError("conflict_running");
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) throw new AppError("conflict_running");
-      locked = true;
       const rows: { id: string; status: string; item_id: string; actor_user_id: string | null; tipo_msj: number; cod_mensaje: string; ind_estado: number }[] =
         await this.db.query(`SELECT e.id,e.status,e.item_id,e.actor_user_id,i.tipo_msj,i.cod_mensaje,i.ind_estado
           FROM mail_read_events e JOIN mail_items i ON i.id=e.item_id AND i.account_id=e.account_id
@@ -74,8 +70,7 @@ export class ReadProcessor {
         throw error;
       }
     } finally {
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
 }

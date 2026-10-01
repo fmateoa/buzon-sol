@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { AppError, logEvent } from "@buzon-sol/domain";
 import { loadSolCredential, type SolCredential } from "./credentials.js";
 import { noticeAdmins } from "./notices.js";
+import { tryAccountLock } from "./account-lock.js";
 
 export interface ConnectionClient {
   testConnection(): Promise<"valid" | "invalid">;
@@ -14,15 +15,10 @@ export class ConnectionProcessor {
   constructor(private readonly db: DataSource, private readonly clientFactory: ConnectionClientFactory) {}
 
   async process(accountId: string, testId: string): Promise<void> {
-    const lease = this.db.createQueryRunner();
-    await lease.connect();
-    const lockName = `buzon:${accountId}`;
-    let locked = false;
+    const lock = await tryAccountLock(this.db, accountId);
+    if (!lock) throw new AppError("conflict_running");
     let client: ConnectionClient | undefined;
     try {
-      const lock: { granted: number | string }[] = await lease.query("SELECT GET_LOCK(?,0) AS granted", [lockName]);
-      if (Number(lock[0]?.granted) !== 1) throw new AppError("conflict_running");
-      locked = true;
       const tests: { status: string; credential_id: string; actor_user_id: string; active: number }[] = await this.db.query(
         `SELECT t.status,t.credential_id,t.actor_user_id,a.active
          FROM connection_tests t JOIN sunat_accounts a ON a.id=t.account_id
@@ -74,8 +70,7 @@ export class ConnectionProcessor {
     } finally {
       try { await client?.close?.(); }
       catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
-      if (locked) await lease.query("SELECT RELEASE_LOCK(?)", [lockName]);
-      await lease.release();
+      await lock.release();
     }
   }
 

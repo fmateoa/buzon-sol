@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { AppError, nextRuns, validateSchedule } from "@buzon-sol/domain";
-import { AuthService, DB, type Principal } from "./auth";
-import { validId } from "./identity";
+import { DB } from "../common/tokens";
+import { recordAudit } from "../common/audit";
+import { AuthService, type Principal } from "../auth/auth";
+import { validId } from "../common/ids";
 
-type Input = Record<string, unknown>;
+type Input = { state?: unknown; boxes?: unknown; downloadReadAttachments?: unknown; notifyInApp?: unknown;
+  notifyDailyEmail?: unknown; remoteEffectAccepted?: unknown };
 const jsonValue = (value: unknown): unknown => typeof value === "string" ? JSON.parse(value) : value;
 
 @Injectable()
@@ -74,10 +77,7 @@ export class SchedulingService {
           input.downloadReadAttachments, input.notifyInApp, false, input.remoteEffectAccepted,
           input.state === "paused" ? "manual" : null, nextRunAt],
       );
-      await manager.query(
-        "INSERT INTO audit_events (id,actor_user_id,account_id,action,object_type,object_id) VALUES (?,?,?,?,?,?)",
-        [randomUUID(), actor.id, accountId, "update", "schedule", accountId],
-      );
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "update", objectType: "schedule", objectId: accountId });
     });
   }
 }
