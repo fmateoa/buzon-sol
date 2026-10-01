@@ -20,7 +20,7 @@ test("BullMQ dispatches a persisted inventory run with an isolated test client",
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
       [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
-    const runId = await new InventoryRunner(db, client).createRun(accountId, "test");
+    const runId = await new InventoryRunner(db, () => client).createRun(accountId, "test");
     await events.waitUntilReady();
     const job = await queue.add("inventory", { accountId, runId }, { jobId: runId, removeOnComplete: true });
     await job.waitUntilFinished(events, 10_000);
@@ -46,7 +46,7 @@ test("async credential failure keeps its error code on the pending run",
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
       [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
-    const runId = await new InventoryRunner(db, { async listPage() { throw new Error("unused"); } }).createRun(accountId, "test");
+    const runId = await new InventoryRunner(db, () => ({ async listPage() { throw new Error("unused"); } })).createRun(accountId, "test");
     await events.waitUntilReady();
     const job = await queue.add("inventory", { accountId, runId }, { jobId: runId, removeOnFail: true });
     await assert.rejects(job.waitUntilFinished(events, 10_000));

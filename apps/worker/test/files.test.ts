@@ -12,7 +12,7 @@ test("invalid MIME is not stored; codArchivo zero stays scoped by item and accou
   const stored = new Map<string, Buffer>();
   let response: FileResponse = { status: 200, contentType: "text/html", bytes: Buffer.from("<html>login</html>") };
   let fetches = 0;
-  const processor = new FileProcessor(db, { async fetch() { fetches++; return response; } },
+  const processor = new FileProcessor(db, () => ({ async fetch() { fetches++; return response; } }),
     { async put(key, bytes) { stored.set(key, bytes); } });
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
@@ -53,11 +53,11 @@ test("codArchivo zero fetches for one account are serialized", { skip: process.e
   let release!: () => void, entered!: () => void;
   const blocked = new Promise<void>((resolve) => { release = resolve; });
   const fetching = new Promise<void>((resolve) => { entered = resolve; });
-  const processor = new FileProcessor(db, { async fetch() {
+  const processor = new FileProcessor(db, () => ({ async fetch() {
     entered();
     await blocked;
     return { status: 200, contentType: "application/pdf", bytes: Buffer.from("%PDF-1.7\nfictional") };
-  } }, { async put() {} });
+  } }), { async put() {} });
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
       [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);

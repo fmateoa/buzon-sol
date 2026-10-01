@@ -14,9 +14,13 @@ export type ConnectionClientFactory = (credential: SolCredential) => ConnectionC
 export class ConnectionProcessor {
   constructor(private readonly db: DataSource, private readonly clientFactory: ConnectionClientFactory) {}
 
-  async process(accountId: string, testId: string): Promise<void> {
+  /** `final: true` closes the test as failed when the account is busy; otherwise it stays `pending` for the next attempt. */
+  async process(accountId: string, testId: string, final = false): Promise<void> {
     const lock = await tryAccountLock(this.db, accountId);
-    if (!lock) throw new AppError("conflict_running");
+    if (!lock) {
+      if (final) await this.finish(testId, "failed", "conflict_running").catch(() => undefined);
+      throw new AppError("conflict_running");
+    }
     let client: ConnectionClient | undefined;
     try {
       const tests: { status: string; credential_id: string; actor_user_id: string; active: number }[] = await this.db.query(
@@ -64,7 +68,9 @@ export class ConnectionProcessor {
               JSON.stringify({ status: result })]);
         });
       } catch (error) {
-        await this.finish(testId, "failed", error instanceof AppError ? error.code : "remote_unavailable");
+        const code = error instanceof AppError ? error.code : "remote_unavailable";
+        logEvent("warn", "connection_test_failed", { accountId, testId, errorCode: code });
+        await this.finish(testId, "failed", code);
         throw error;
       }
     } finally {

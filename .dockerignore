@@ -7,3 +7,9 @@ apps/web/*
 !apps/web/package.json
 specs
 scripts
+# Fuentes de la web para Dockerfile.web (el .env se sustituye por build args).
+!apps/web/index.html
+!apps/web/src
+!apps/web/vite.config.ts
+!apps/web/tsconfig*.json
+!apps/web/.env.production

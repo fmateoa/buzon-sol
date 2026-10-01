@@ -2,8 +2,8 @@ import "reflect-metadata";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DataSource } from "typeorm";
-import { InventoryService } from "../src/inventory";
-import type { AuthService, Principal } from "../src/auth";
+import { InventoryService } from "../src/inventory/inventory";
+import type { AuthService, Principal } from "../src/auth/auth";
 
 test("el inventario distingue la puerta cerrada de un fallo remoto", async () => {
   assert.notEqual(process.env.SUNAT_TRANSPORT_VALIDATED, "true");

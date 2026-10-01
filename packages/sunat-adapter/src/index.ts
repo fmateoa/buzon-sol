@@ -77,10 +77,14 @@ export interface ScanPage {
   confirmedEmpty: boolean;
 }
 
+/**
+ * Walks a box page by page. `persistPage` may answer `"stop"` to end the walk of this box early (an incremental run
+ * that reached rows it already knows, or a run yielding the account to a user command); a stop is never an error.
+ */
 export async function scanBox(
   client: InventoryClient,
   box: MailBox,
-  persistPage: (page: ScanPage) => Promise<void>,
+  persistPage: (page: ScanPage) => Promise<void | "stop">,
   startPage = 1,
   maxPages = 500,
 ): Promise<void> {
@@ -99,9 +103,10 @@ export async function scanBox(
       }
       parsed = confirmation;
     }
-    await persistPage({ box, page, rows: parsed.rows, received: parsed.rows.length,
+    const outcome = await persistPage({ box, page, rows: parsed.rows, received: parsed.rows.length,
       declaredRecords: parsed.declaredRecords, declaredPages: parsed.declaredPages,
       confirmedEmpty: false });
+    if (outcome === "stop") return;
   }
   throw new AppError("incomplete_inventory");
 }

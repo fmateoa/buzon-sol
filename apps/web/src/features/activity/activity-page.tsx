@@ -110,7 +110,10 @@ export const ActivityPage = () => {
 									Reanudar desde pág. {resumable.resumeFrom.page}
 								</Button>
 							)}
-							{canRun && <Button variant="bordered" onClick={() => start.mutate()} disabled={credentialPaused || running || start.isPending || account.connection.pauseReason === "needs_credential"} isLoading={start.isPending} className="min-h-11 bg-paper">
+							{canRun && <Button variant="light" onClick={() => start.mutate({ full: true })} disabled={credentialPaused || running || start.isPending || account.connection.pauseReason === "needs_credential"} className="min-h-11">
+								Recorrido completo
+							</Button>}
+							{canRun && <Button variant="bordered" onClick={() => start.mutate(undefined)} disabled={credentialPaused || running || start.isPending || account.connection.pauseReason === "needs_credential"} isLoading={start.isPending} className="min-h-11 bg-paper">
 								Consultar ahora
 							</Button>}
 						</>

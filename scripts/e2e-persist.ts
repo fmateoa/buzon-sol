@@ -123,22 +123,29 @@ async function main(): Promise<void> {
     };
     const pass = async (accountId: string) => {
       const started = Date.now();
-      const credential = await loadSolCredential(db, accountId); // descifrado como en el worker
-      const session = await SunatHttpSession.open(credential);
-      try {
-        const runner = new InventoryRunner(db, session);
-        const runId = await runner.createRun(accountId, "manual");
-        await runner.run(accountId, runId);
-        const run: { state: string; error_code: string | null }[] = await db.query("SELECT state,error_code FROM sync_runs WHERE id=?", [runId]);
-        const pages: { n: string; empties: string }[] = await db.query(
-          "SELECT COUNT(*) AS n,SUM(confirmed_empty) AS empties FROM sync_pages WHERE run_id=?", [runId]);
-        return { state: run[0]?.state, error: run[0]?.error_code, pages: Number(pages[0]?.n), emptyConfirmations: Number(pages[0]?.empties),
-          seconds: Math.round((Date.now() - started) / 1000), persisted: await counts(accountId) };
-      } finally { await session.close(); }
+      // El runner abre la sesión (tras tomar el bloqueo de la cuenta) y la cierra en su `finally`.
+      const runner = new InventoryRunner(db, async () => SunatHttpSession.open(await loadSolCredential(db, accountId)));
+      const runId = await runner.createRun(accountId, "manual");
+      let error: string | null = null;
+      try { await runner.run(accountId, runId); }
+      catch (caught) { error = caught instanceof Error && "code" in caught ? String(caught.code) : "inventory_failed"; }
+      const run: { state: string; error_code: string | null }[] = await db.query("SELECT state,error_code FROM sync_runs WHERE id=?", [runId]);
+      const pages: { n: string; empties: string }[] = await db.query(
+        "SELECT COUNT(*) AS n,SUM(confirmed_empty) AS empties FROM sync_pages WHERE run_id=?", [runId]);
+      return { state: run[0]?.state, error: run[0]?.error_code ?? error, pages: Number(pages[0]?.n), emptyConfirmations: Number(pages[0]?.empties),
+        seconds: Math.round((Date.now() - started) / 1000), persisted: await counts(accountId) };
     };
     const archiveMode = process.argv[2] === "--e2e-archive";
-    const first = await Promise.all(ids.map(pass));
-    const second = archiveMode ? first : await Promise.all(ids.map(pass));
+    // Secuencial por defecto: el isolation-check en paralelo falló con remote_unavailable y aún no se sabe si SUNAT limita logins simultáneos.
+    // E2E_PARALLEL=1 vuelve al barrido simultáneo de todas las cuentas.
+    const runAll = async () => {
+      if (process.env.E2E_PARALLEL === "1") return Promise.all(ids.map(pass));
+      const out: Awaited<ReturnType<typeof pass>>[] = [];
+      for (const id of ids) out.push(await pass(id));
+      return out;
+    };
+    const first = await runAll();
+    const second = archiveMode ? first : await runAll();
     const report = ids.map((_, index) => ({
       account: index + 1, first: first[index], secondPassSameCounts: JSON.stringify(first[index]!.persisted) === JSON.stringify(second[index]!.persisted),
       secondState: second[index]!.state,
@@ -146,7 +153,11 @@ async function main(): Promise<void> {
     const crossAccount: { n: string }[] = await db.query(
       `SELECT COUNT(*) AS n FROM mail_items m WHERE m.account_id IN (${ids.map(() => "?").join(",")})
        AND NOT EXISTS (SELECT 1 FROM sunat_accounts a WHERE a.id=m.account_id)`, ids);
-    const archive = archiveMode ? await Promise.all(ids.map((accountId) => archiveBatch(db, accountId))) : undefined;
+    let archive: object[] | undefined;
+    if (archiveMode) {
+      if (process.env.E2E_PARALLEL === "1") archive = await Promise.all(ids.map((accountId) => archiveBatch(db, accountId)));
+      else { archive = []; for (const accountId of ids) archive.push(await archiveBatch(db, accountId)); }
+    }
     process.stdout.write(JSON.stringify({ accountsRun: ids.length, report, orphanRows: Number(crossAccount[0]!.n), archive }) + "\n");
   } finally { await db.destroy(); }
 }

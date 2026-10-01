@@ -6,6 +6,7 @@ import dataSource from "./db/data-source";
 import { validateApiConfig } from "./config";
 import { AppModule } from "./module";
 import { cookieSessionHook } from "./auth/session-cookie";
+import { corsHook } from "./common/cors";
 
 const SHUTDOWN_GRACE_MS = 15_000;
 
@@ -16,6 +17,8 @@ async function main(): Promise<void> {
     logger: ["error", "warn"],
   });
   app.setGlobalPrefix("api/v1");
+  // CORS primero: el preflight no lleva cookies y debe responderse antes de la autenticación.
+  app.getHttpAdapter().getInstance().addHook("onRequest", corsHook());
   app.getHttpAdapter().getInstance().addHook("onRequest", cookieSessionHook);
   await app.listen(Number(process.env.API_PORT ?? 3000), "0.0.0.0");
 

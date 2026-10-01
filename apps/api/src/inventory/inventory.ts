@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { addJob } from "../common/job-queue";
 import { DataSource } from "typeorm";
-import { AppError, INVENTORY_QUEUE, type InventoryJob } from "@buzon-sol/domain";
+import { AppError, INVENTORY_QUEUE, chooseScanKind, type InventoryJob, type MailBox, type ScanKind } from "@buzon-sol/domain";
 import { DB } from "../common/tokens";
 import { recordAudit } from "../common/audit";
 import { AuthService, type Principal } from "../auth/auth";
 import { validId } from "../common/ids";
+
+export interface StartOptions { full?: boolean }
 
 @Injectable()
 export class InventoryService {
@@ -16,7 +18,7 @@ export class InventoryService {
     if (process.env.SUNAT_TRANSPORT_VALIDATED !== "true") throw new AppError("remote_disabled");
   }
 
-  async start(actor: Principal, accountId: string): Promise<{ id: string; state: string }> {
+  async start(actor: Principal, accountId: string, options: StartOptions = {}): Promise<{ id: string; state: string; scanKind?: ScanKind }> {
     this.auth.requireAccount(actor, "run_inventory", validId(accountId));
     this.requireGate();
     const run = await this.db.transaction(async (manager) => {
@@ -27,20 +29,24 @@ export class InventoryService {
         "SELECT status FROM sunat_credentials WHERE account_id=? ORDER BY version DESC LIMIT 1", [accountId]);
       if (!credentials.length) throw new AppError("needs_credential");
       if (credentials[0].status !== "valid") throw new AppError("invalid_credential");
-      const existing: { id: string; state: string }[] = await manager.query(
-        "SELECT id,state FROM sync_runs WHERE account_id=? AND state IN ('pending','running') ORDER BY started_at DESC LIMIT 1", [accountId]);
+      const existing: { id: string; state: string; scanKind: ScanKind }[] = await manager.query(
+        "SELECT id,state,scan_kind AS scanKind FROM sync_runs WHERE account_id=? AND state IN ('pending','running') ORDER BY started_at DESC LIMIT 1", [accountId]);
       if (existing.length) return existing[0];
       const id = randomUUID();
+      const boxes: MailBox[] = ["messages", "notifications"];
+      // Incremental when a recent complete full pass covers both boxes; `full: true` forces the complete walk.
+      const scanKind = await chooseScanKind((sql, params) => manager.query(sql, params), accountId, boxes, { full: options.full });
       await manager.query(
         // A manual run covers both boxes; scheduled runs use the configured boxes.
-        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page,boxes_json) VALUES (?,?,?,?,?,?,?)",
-        [id, accountId, "manual", "pending", 1, 1, JSON.stringify(["messages", "notifications"])],
+        "INSERT INTO sync_runs (id,account_id,mode,state,resume_box,resume_page,boxes_json,scan_kind) VALUES (?,?,?,?,?,?,?,?)",
+        [id, accountId, "manual", "pending", 1, 1, JSON.stringify(boxes), scanKind],
       );
-      await recordAudit(manager, { actorId: actor.id, accountId, action: "start", objectType: "sync_run", objectId: id });
-      return { id, state: "pending" };
+      await recordAudit(manager, { actorId: actor.id, accountId, action: "start", objectType: "sync_run", objectId: id,
+        change: { scanKind } });
+      return { id, state: "pending", scanKind };
     });
     if (run.state === "pending") await this.enqueue(accountId, run.id);
-    return { id: run.id, state: run.state };
+    return { id: run.id, state: run.state, scanKind: run.scanKind };
   }
 
   /**
@@ -48,7 +54,7 @@ export class InventoryService {
    * An account that cannot start (no credential, rejected credential, queue down) reports its code and never
    * blocks the others.
    */
-  async startAll(actor: Principal): Promise<{ accountId: string; runId: string | null; state: string | null; code: string | null }[]> {
+  async startAll(actor: Principal, options: StartOptions = {}): Promise<{ accountId: string; runId: string | null; state: string | null; code: string | null }[]> {
     this.auth.requirePermission(actor, "run_inventory");
     this.requireGate();
     const accounts: { id: string }[] = await this.db.query(
@@ -58,7 +64,7 @@ export class InventoryService {
     const results = [];
     for (const account of accounts) {
       try {
-        const run = await this.start(actor, account.id);
+        const run = await this.start(actor, account.id, options);
         results.push({ accountId: account.id, runId: run.id, state: run.state, code: null });
       } catch (error) {
         if (!(error instanceof AppError)) throw error;

@@ -70,6 +70,7 @@ Mismas reglas de marcado que el [plan backend](01-backend.md#seguimiento-de-avan
 - [x] Inventario de una cuenta o de todas, reanudación, lectura explícita con espera del worker (`GET …/reads/:eventId`), descargas por el proxy autenticado y revisión local (`http-adapter.test.ts`).
 - [x] Archivo de la cuenta: configuración (pestaña Archivo), avance e inicio manual (Actividad) (`http-adapter.test.ts`; recorrido manual).
 - [x] Programación activa: se envía a la API, que la acepta solo con sus puertas.
+- [x] Carga inicial en segundo plano: aviso «Carga inicial en curso» con lo ya cargado, lista y resumen que se refrescan solos, estado «en cola» para una corrida cedida y «Recorrido completo» en Actividad (ver BE-9 en [plan/01-backend.md](01-backend.md#be-9-carga-inicial-en-segundo-plano-inventario-incremental-y-cesión-de-la-cuenta); `http-adapter.test.ts`). Falta probarlo desde la interfaz contra SUNAT real.
 - [ ] Avisos en app (`/notices`): la API los entrega; falta pantalla y operación en `BuzonAdapter`.
 - [ ] Filtro por carpeta: `listFolders` devuelve vacío hasta validar S-10.
 - [x] «Probar conexión…» sobre `POST /admin/accounts/:id/connection-tests` y sondeo de `GET …/:testId` hasta el resultado del worker; sin `SUNAT_CONNECTION_CLIENT_READY` la API responde `remote_unavailable` (`http-adapter.test.ts`).

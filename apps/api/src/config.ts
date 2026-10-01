@@ -31,6 +31,15 @@ export function validateApiConfig(env: Env = process.env): void {
       if (protocol !== "redis:" && protocol !== "rediss:") throw new Error();
     } catch { throw new Error("Invalid REDIS_URL"); }
   }
+  for (const origin of (env.CORS_ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean)) {
+    try {
+      const url = new URL(origin);
+      if ((url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== origin) throw new Error();
+    } catch { throw new Error("Invalid CORS_ALLOWED_ORIGINS"); }
+  }
+  if (env.SESSION_COOKIE_DOMAIN && !/^\.?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(env.SESSION_COOKIE_DOMAIN.trim())) {
+    throw new Error("Invalid SESSION_COOKIE_DOMAIN");
+  }
   // El worker es el único que abre la Clave SOL. Si el despliegue comparte el entorno con la API, se avisa.
   if (env.SOL_PRIVATE_KEY_PEM) logEvent("warn", "api_has_worker_private_key");
 }

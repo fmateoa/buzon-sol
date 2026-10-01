@@ -49,6 +49,7 @@ export interface RunDto {
 	accountId?: string;
 	accountAlias?: string;
 	mode: string;
+	scanKind?: string;
 	state: string;
 	startedAt: string | null;
 	finishedAt: string | null;
@@ -72,6 +73,7 @@ export interface SummaryDto {
 	failedFiles: number;
 	newSince: string | null;
 	boxes: Record<MailBox, { uniqueCount: number; unreadInSunat: number }>;
+	initialLoad?: { done: boolean; active: boolean };
 }
 export interface FileDto {
 	id: string;
@@ -186,7 +188,8 @@ export const toRun = (accountId: AccountId, dto: RunDto): InventoryRun => {
 	return {
 		id: dto.id as RunId,
 		accountId,
-		mode: dto.mode === "scheduled" || dto.mode === "test" ? dto.mode : "manual",
+		mode: dto.mode === "scheduled" || dto.mode === "test" || dto.mode === "initial" ? dto.mode : "manual",
+		scanKind: dto.scanKind === "incremental" ? "incremental" : "full",
 		startedAt: dto.startedAt ?? dto.finishedAt ?? new Date().toISOString(),
 		finishedAt: dto.finishedAt,
 		boxes: runBoxes(dto),

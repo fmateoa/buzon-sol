@@ -77,3 +77,4 @@ export { INVENTORY_QUEUE, READ_QUEUE, CONNECTION_QUEUE, FILE_QUEUE, ARCHIVE_QUEU
 export { redisOptions, redisApiOptions } from "./redis.js";
 export { parseSunatDateTime, renderStructuredBody } from "./mail.js";
 export { logEvent, redactFields, setLogSink, type LogFields } from "./log.js";
+export { chooseScanKind, FULL_RECONCILE_DAYS, type ScanKind, type Query as ScanQuery } from "./scan.js";

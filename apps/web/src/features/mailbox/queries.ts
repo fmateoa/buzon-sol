@@ -12,7 +12,8 @@ export const useMailList = (accountId: AccountId, box: MailBox, request: ListReq
 		queryKey: qk.mail(accountId, box, request),
 		queryFn: () => adapter.listMail(accountId, box, request),
 		placeholderData: keepPreviousData,
-		refetchInterval: (query) => (query.state.data?.coverage.state === "running" ? 2000 : false),
+		// «pending» es una corrida en cola o cedida a un comando del usuario: sigue llegando correo.
+		refetchInterval: (query) => (["running", "pending"].includes(query.state.data?.coverage.state ?? "") ? 2000 : false),
 	});
 };
 

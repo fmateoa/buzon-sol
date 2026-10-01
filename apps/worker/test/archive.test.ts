@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { AppError, setLogSink, type MailBox } from "@buzon-sol/domain";
-import { ArchiveProcessor, planArchive, recoverOrphanArchiveRuns, type ArchiveClient } from "../src/archive";
+import { ArchiveProcessor, type ArchiveClient } from "../src/archive";
+import { planArchive } from "../src/archive-plan";
+import { recoverOrphanArchiveRuns } from "../src/recovery";
 import { testDb } from "./db";
 
 type Db = Awaited<ReturnType<typeof testDb>>;
@@ -310,7 +312,7 @@ test("a complete inventory queues the account archive, which continues batch by 
         async readDetail(_box: MailBox, code: string) { opened.push(code); return { body: "<p>Ficticio</p>", updateLeido: false }; },
         async downloadAttachment() { return pdf; }, async downloadGeneratedDocument() { return pdf; },
       })));
-      const runId = await new InventoryRunner(db, inventory).createRun(accountId, "manual");
+      const runId = await new InventoryRunner(db, () => inventory).createRun(accountId, "manual");
       await events.waitUntilReady();
       const job = await queue.add("inventory", { accountId, runId }, { jobId: runId, removeOnComplete: true });
       await job.waitUntilFinished(events, 10_000);

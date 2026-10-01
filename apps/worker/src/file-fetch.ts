@@ -2,15 +2,17 @@ import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
 import { AppError, logEvent } from "@buzon-sol/domain";
 import { S3Storage } from "@buzon-sol/storage";
-import { FileProcessor, type FileClient, type ObjectStore } from "./files.js";
-
-export type FileClientFactory = (accountId: string) => FileClient | Promise<FileClient>;
+import { FileProcessor, type FileClientFactory, type ObjectStore } from "./files.js";
 
 export class FileFetchProcessor {
   constructor(private readonly db: DataSource, private readonly clientFactory: FileClientFactory,
     private readonly store: ObjectStore = new S3Storage()) {}
 
-  async process(accountId: string, fetchId: string): Promise<void> {
+  /**
+   * `final: false` means the queue will try again if the account is busy: that attempt must not close the request as
+   * failed, only leave it `pending` (and therefore visible to the inventory as a user waiting for the account).
+   */
+  async process(accountId: string, fetchId: string, final = true): Promise<void> {
     const rows: { file_id: string; actor_user_id: string | null; status: string }[] = await this.db.query(
       "SELECT file_id,actor_user_id,status FROM file_fetches WHERE id=? AND account_id=?", [fetchId, accountId]);
     const request = rows[0];
@@ -33,21 +35,22 @@ export class FileFetchProcessor {
          WHERE f.id=? AND f.account_id=? AND e.status='complete' LIMIT 1`, [request.file_id, accountId]);
       if (!reads.length) throw new AppError("forbidden");
     };
-    let client: FileClient | undefined;
     try {
       await authorize();
       await this.db.query("UPDATE file_fetches SET status='fetching' WHERE id=? AND status IN ('pending','fetching')", [fetchId]);
-      client = await this.clientFactory(accountId);
-      await new FileProcessor(this.db, client, this.store).process(accountId, request.file_id, authorize);
+      // The processor takes the account lock, re-runs `authorize` and only then opens the session.
+      await new FileProcessor(this.db, this.clientFactory, this.store).process(accountId, request.file_id, authorize);
       await this.finish(fetchId, accountId, request.actor_user_id, "complete", null);
     } catch (error) {
       const code = error instanceof AppError ? error.code : "remote_unavailable";
+      if (code === "conflict_running" && !final) {
+        await this.db.query("UPDATE file_fetches SET status='pending' WHERE id=? AND account_id=? AND status='fetching'", [fetchId, accountId]);
+        throw error;
+      }
+      logEvent("warn", "file_fetch_failed", { accountId, fetchId, errorCode: code });
       await this.finish(fetchId, accountId, request.actor_user_id,
         code === "forbidden" || code === "paused" ? "denied" : "failed", code);
       throw error;
-    } finally {
-      try { await client?.close?.(); }
-      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
     }
   }
 

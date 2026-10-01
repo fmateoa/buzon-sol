@@ -11,7 +11,8 @@ export const useSummary = (accountId: AccountId, enabled = true) => {
 		queryKey: qk.summary(accountId),
 		queryFn: () => adapter.getSummary(accountId),
 		enabled,
-		refetchInterval: (query) => (query.state.data?.connection.running ? 1500 : false),
+		// Durante la carga inicial el resumen se refresca solo: los conteos y el aviso siguen el avance.
+		refetchInterval: (query) => (query.state.data?.connection.running ? 1500 : query.state.data?.initialLoad.active ? 4000 : false),
 	});
 };
 
@@ -47,8 +48,8 @@ export const useStartInventory = (accountId: AccountId) => {
 	const adapter = useAdapter();
 	const invalidate = useInvalidateAccount();
 	return useMutation({
-		mutationFn: async () => {
-			const result = await adapter.startInventory(accountId);
+		mutationFn: async (options?: { full?: boolean }) => {
+			const result = await adapter.startInventory(accountId, options);
 			if (!result.ok) throw result.error;
 			return result.data;
 		},

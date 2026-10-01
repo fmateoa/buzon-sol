@@ -33,3 +33,10 @@ test("readiness reports MySQL down as 503 without leaking why; liveness never to
   const working = await new HealthController({ query: async () => [{ 1: 1 }] } as never).ready({ status() { throw new Error("must not fail"); } } as never);
   assert.deepEqual(working, { status: "ok", checks: { database: "ok", redis: "skipped" } });
 });
+
+test("API valida orígenes CORS y dominio de cookie sin repetir su valor", () => {
+  assert.doesNotThrow(() => validateApiConfig({ ...valid, CORS_ALLOWED_ORIGINS: "https://buzon.example.com, http://localhost:5173", SESSION_COOKIE_DOMAIN: "example.com" }));
+  assert.throws(() => validateApiConfig({ ...valid, CORS_ALLOWED_ORIGINS: "https://buzon.example.com/" }), /Invalid CORS_ALLOWED_ORIGINS/);
+  assert.throws(() => validateApiConfig({ ...valid, CORS_ALLOWED_ORIGINS: "*" }), /Invalid CORS_ALLOWED_ORIGINS/);
+  assert.throws(() => validateApiConfig({ ...valid, SESSION_COOKIE_DOMAIN: "x.com; Path=/" }), /Invalid SESSION_COOKIE_DOMAIN/);
+});

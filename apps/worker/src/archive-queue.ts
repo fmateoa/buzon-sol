@@ -1,7 +1,8 @@
 import { Queue, Worker } from "bullmq";
 import { DataSource } from "typeorm";
 import { ARCHIVE_QUEUE, logEvent, redisOptions, type ArchiveJob } from "@buzon-sol/domain";
-import { ArchiveProcessor, planArchive, type ArchiveClientFactory, type EnqueueArchive } from "./archive.js";
+import { ArchiveProcessor, type ArchiveClientFactory } from "./archive.js";
+import { planArchive, type EnqueueArchive } from "./archive-plan.js";
 import { type ObjectStore } from "./files.js";
 
 export async function enqueueArchiveRun(accountId: string, runId: string, delayMs = 0): Promise<void> {

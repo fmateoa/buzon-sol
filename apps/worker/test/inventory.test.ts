@@ -12,7 +12,7 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
   const accountId = randomUUID();
   const calls: string[] = [];
   let failOnce = true;
-  const runner = new InventoryRunner(db, { async listPage(box: MailBox, page: number) {
+  const runner = new InventoryRunner(db, () => ({ async listPage(box: MailBox, page: number) {
     calls.push(`${box}:${page}`);
     if (box === "messages" && page === 1) return json([{ codMensaje: 1, indEstado: 0 }, { codMensaje: 2, indEstado: 0 }]);
     if (box === "messages" && page === 2) {
@@ -22,7 +22,7 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
     }
     if (box === "notifications" && page === 1) return json([{ codMensaje: 4, indEstado: 0 }]);
     return json([]);
-  } });
+  } }));
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
       [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
@@ -52,11 +52,11 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
     let pageEntered!: () => void;
     const entered = new Promise<void>((resolve) => { pageEntered = resolve; });
     const blocked = new Promise<void>((resolve) => { releasePage = resolve; });
-    const slow = new InventoryRunner(db, { async listPage() {
+    const slow = new InventoryRunner(db, () => ({ async listPage() {
       pageEntered();
       await blocked;
       return json([]);
-    } });
+    } }));
     const secondRun = await slow.createRun(accountId, "test");
     const running = slow.run(accountId, secondRun);
     const first = await Promise.race([entered.then(() => "entered"), running.then(() => "completed")]);
@@ -72,7 +72,7 @@ test("persisted checkpoint resumes failed page without duplicate mail", { timeou
       [adminId, `worker-${adminId}@example.test`, "Fixture", "fixture-hash", "active", adminRole]);
     await db.query("INSERT INTO sync_schedules (id,account_id,frequency,days_json,window_start,window_end,boxes_json,state) VALUES (?,?,?,?,?,?,?,?)",
       [randomUUID(), accountId, "daily", JSON.stringify(["mon"]), "08:00:00", "17:00:00", JSON.stringify(["messages"]), "active"]);
-    const failing = new InventoryRunner(db, { async listPage() { throw new AppError("remote_unavailable"); } });
+    const failing = new InventoryRunner(db, () => ({ async listPage() { throw new AppError("remote_unavailable"); } }));
     for (let attempt = 0; attempt < 3; attempt++) {
       const failedRun = await failing.createRun(accountId, "test");
       await assert.rejects(failing.run(accountId, failedRun));

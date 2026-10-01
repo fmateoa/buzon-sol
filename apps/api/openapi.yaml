@@ -198,7 +198,7 @@ paths:
       operationId: accountSummary
       x-permission: view_mailbox
       responses:
-        '200': { description: Estado actual y línea base de la última corrida completa }
+        '200': { description: 'Estado actual y línea base de la última corrida completa. `initialLoad`: { done: ya hubo un recorrido completo, active: no lo hubo y hay una corrida en cola o en curso }, para avisar que el resto del buzón sigue llegando' }
         default: { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/activity:
     parameters:
@@ -215,7 +215,18 @@ paths:
     post:
       operationId: startInventory
       x-permission: run_inventory
-      description: Responde 503 con `remote_disabled` si las consultas están desactivadas en este servidor.
+      description: >-
+        Responde 503 con `remote_disabled` si las consultas están desactivadas en este servidor. La corrida es
+        `incremental` (se detiene en la primera página sin cambios) cuando un recorrido completo de las dos bandejas,
+        de menos de 7 días, la respalda; si no, o con `full: true`, recorre todo.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full: { type: boolean, default: false, description: Fuerza el recorrido completo aunque un recorrido completo reciente permita uno incremental }
       responses:
         '201':
           description: Corrida persistida y encolada
@@ -230,7 +241,15 @@ paths:
       description: >-
         Inicia un inventario por cada cuenta activa que el usuario puede consultar. Cada cuenta tiene su propia
         corrida y sesión; la que no puede iniciar informa su código y no detiene a las demás. Responde 503 con
-        `remote_disabled` si las consultas están desactivadas en este servidor.
+        `remote_disabled` si las consultas están desactivadas en este servidor. Acepta `full` como la corrida de una cuenta.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full: { type: boolean, default: false, description: Fuerza el recorrido completo aunque un recorrido completo reciente permita uno incremental }
       responses:
         '201':
           description: Resultado por cuenta
@@ -903,6 +922,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         state: { type: string, enum: [pending, running, complete, partial, retrying, paused] }
+        scanKind: { type: string, enum: [full, incremental], description: Recorrido completo o incremental de la corrida }
     ReadResult:
       type: object
       required: [id, status]

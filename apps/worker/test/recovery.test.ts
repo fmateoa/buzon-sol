@@ -16,7 +16,7 @@ test("orphan runs become resumable partial runs; live or queued runs are untouch
     for (const accountId of accounts) {
       await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
         [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
-      runs[accountId] = await new InventoryRunner(db, empty).createRun(accountId, "test");
+      runs[accountId] = await new InventoryRunner(db, () => empty).createRun(accountId, "test");
     }
     await db.query("UPDATE sync_runs SET state='running',resume_box=1,resume_page=7 WHERE id IN (?,?)", [runs[crashed], runs[live]]);
     const holder = db.createQueryRunner();
@@ -42,10 +42,10 @@ test("orphan runs become resumable partial runs; live or queued runs are untouch
     assert.equal(Number(audit[0].n), 2);
     // The recovered checkpoint resumes where the dead process stopped.
     const pages: string[] = [];
-    await new InventoryRunner(db, { async listPage(box, page) {
+    await new InventoryRunner(db, () => ({ async listPage(box, page) {
       pages.push(`${box}:${page}`);
       return { contentType: "application/json", body: '{"rows":[]}' };
-    } }).run(crashed, runs[crashed]);
+    } })).run(crashed, runs[crashed]);
     assert.equal(pages[0], "messages:7");
     assert.equal(await recoverOrphanRuns(db, async () => false) >= 0, true);
     const again: { state: string }[] = await db.query("SELECT state FROM sync_runs WHERE id=?", [runs[crashed]]);

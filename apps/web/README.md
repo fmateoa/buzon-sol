@@ -106,7 +106,7 @@ Sin inventar endpoints, el backend deberá acordar: autenticación de la app y r
 
 ## Modo backend (INT-1: gestión)
 
-`pnpm dev` lee `.env` (`VITE_DATA_SOURCE=backend`) y usa `HttpAdapter` (`src/adapters/http`) en lugar de `LocalAdapter`; `main.tsx` elige según `VITE_DATA_SOURCE`. `pnpm dev:prototype` (modo `prototype`, `.env.prototype`) vuelve a los datos ficticios, y las pruebas siempre usan el adaptador local. El servidor de desarrollo reenvía `/api` a `BUZON_API_URL` (por defecto `http://127.0.0.1:38080`).
+`pnpm dev` lee `.env` (`VITE_DATA_SOURCE=backend`) y usa `HttpAdapter` (`src/adapters/http`) en lugar de `LocalAdapter`; `main.tsx` elige según `VITE_DATA_SOURCE`. `pnpm dev:prototype` (modo `prototype`, `.env.prototype`) vuelve a los datos ficticios, y las pruebas siempre usan el adaptador local. El servidor de desarrollo reenvía `/api` a `BUZON_API_URL` (por defecto `http://127.0.0.1:38080`). Con la API en otro subdominio (producción), `VITE_API_URL=https://api.<dominio>` se fija al compilar (en producción, desde `apps/web/.env.production`, que lee `Dockerfile.web`); sin ella el cliente usa `/api/v1` relativo. Ver [plan/07](../../specs/buzon-sol/plan/07-deployment.md).
 
 - Conectado: sesión, preferencia de aviso, usuarios, roles, cuentas SUNAT, credencial, programador (sin activarlo) y auditoría.
 - «Probar conexión…» encola la prueba en la API y espera el resultado del worker (requiere `SUNAT_CONNECTION_CLIENT_READY` en API y worker).

@@ -12,7 +12,7 @@ export class OperationsService {
   async activity(actor: Principal, accountId: string) {
     this.auth.requireAccount(actor, "view_mailbox", validId(accountId));
     const runs = await this.db.query(
-      `SELECT id,mode,state,started_at AS startedAt,finished_at AS finishedAt,
+      `SELECT id,mode,state,scan_kind AS scanKind,yield_count AS yieldCount,started_at AS startedAt,finished_at AS finishedAt,
        resume_box AS resumeBox,resume_page AS resumePage,
        pause_reason AS pauseReason,error_code AS errorCode,boxes_json AS boxes,
        folders_state AS foldersState,labels_state AS labelsState,alerts_state AS alertsState,
@@ -36,7 +36,7 @@ export class OperationsService {
   async runs(actor: Principal) {
     this.auth.requirePermission(actor, "manage_accounts");
     return this.db.query(
-      `SELECT r.id,r.account_id AS accountId,a.alias AS accountAlias,r.mode,r.state,r.started_at AS startedAt,
+      `SELECT r.id,r.account_id AS accountId,a.alias AS accountAlias,r.mode,r.state,r.scan_kind AS scanKind,r.started_at AS startedAt,
          r.finished_at AS finishedAt,r.resume_box AS resumeBox,r.resume_page AS resumePage,r.error_code AS errorCode,
          r.boxes_json AS boxes,r.new_messages AS newMessages,r.new_notifications AS newNotifications,
          (SELECT COALESCE(SUM(p.rows_received),0) FROM sync_pages p WHERE p.run_id=r.id) AS received
@@ -71,7 +71,13 @@ export class OperationsService {
     const previous: { finished_at: Date }[] = await this.db.query(
       "SELECT finished_at FROM sync_runs WHERE account_id=? AND state='complete' ORDER BY finished_at DESC LIMIT 1 OFFSET 1", [accountId]);
     const pendingReview = (code: number) => Number(reviewBacklog.find((row) => Number(row.tipo_msj) === code)?.n ?? 0);
-    return { accountId, state: latest[0]?.state ?? null, verified,
+    // Initial load: the account has never completed a full pass. While a run is queued or going, the mailbox shows what is
+    // already stored and says the rest is still arriving; once a full pass completes it never comes back.
+    const fullPass: unknown[] = await this.db.query(
+      "SELECT 1 AS ok FROM sync_runs WHERE account_id=? AND state='complete' AND scan_kind='full' LIMIT 1", [accountId]);
+    const initialLoad = { done: fullPass.length > 0,
+      active: !fullPass.length && ["pending", "running"].includes(latest[0]?.state ?? "") };
+    return { accountId, state: latest[0]?.state ?? null, verified, initialLoad,
       pendingReview: { messages: pendingReview(1), notifications: pendingReview(2) },
       failedFiles: Number(failedFiles[0]?.n ?? 0), newSince: previous[0]?.finished_at ?? null,
       boxes: { messages: { ...this.boxCount(counts, 1), lastVerifiedCount: baseline.length ? this.baselineCount(baselineCounts, 1) : null },

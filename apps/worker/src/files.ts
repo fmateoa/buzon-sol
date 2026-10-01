@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { DataSource } from "typeorm";
-import { AppError } from "@buzon-sol/domain";
+import { AppError, logEvent } from "@buzon-sol/domain";
 import sanitizeHtml from "sanitize-html";
 import { tryAccountLock } from "./account-lock.js";
 
@@ -10,6 +10,8 @@ export interface FileClient {
     codArchivo: string | null, numId: string | null): Promise<FileResponse>;
   close?(): Promise<void>;
 }
+/** Opens one session for one account; `FileProcessor` calls it only after the lock and the authorization checks. */
+export type FileClientFactory = (accountId: string) => FileClient | Promise<FileClient>;
 export interface ObjectStore {
   put(key: string, bytes: Buffer, mime: string): Promise<void>;
 }
@@ -69,11 +71,12 @@ export async function storeFile(db: DataSource, store: ObjectStore, accountId: s
 }
 
 export class FileProcessor {
-  constructor(private readonly db: DataSource, private readonly client: FileClient, private readonly store: ObjectStore) {}
+  constructor(private readonly db: DataSource, private readonly clientFactory: FileClientFactory, private readonly store: ObjectStore) {}
 
   async process(accountId: string, fileId: string, authorize?: () => Promise<void>): Promise<void> {
     const lock = await tryAccountLock(this.db, accountId);
     if (!lock) throw new AppError("conflict_running");
+    let client: FileClient | undefined;
     try {
       const assets: { id: string; item_id: string; kind: "attachment" | "generated_document";
         cod_archivo: string | null; num_id: string | null; state: string }[] =
@@ -82,9 +85,13 @@ export class FileProcessor {
       if (!asset) throw new AppError("not_found");
       if (asset.state === "stored") return;
       await authorize?.();
-      const response = async () => this.client.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
+      client = await this.clientFactory(accountId);
+      const open = client;
+      const response = async () => open.fetch(accountId, asset.item_id, asset.kind, asset.cod_archivo, asset.num_id);
       await storeFile(this.db, this.store, accountId, asset, response);
     } finally {
+      try { await client?.close?.(); }
+      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
       await lock.release();
     }
   }

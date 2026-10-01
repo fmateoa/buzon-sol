@@ -1,0 +1,17 @@
+# Web image: compiles apps/web with Vite and serves the static build with nginx.
+# VITE_API_URL is baked in at build time from apps/web/.env.production (origin of the API, e.g. https://api.buzon.example.com).
+FROM node:24-bookworm-slim AS build
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 CI=true
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --filter "@buzon-sol/web..."
+COPY apps/web apps/web
+ENV VITE_DATA_SOURCE=backend
+RUN pnpm --filter @buzon-sol/web build
+
+FROM nginx:1.27-alpine
+COPY deploy/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80

@@ -8,6 +8,11 @@ const DETAIL = "https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor/obtenerDetalleN
 const FOLDERS = "https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor/ajax/listarCarpetas";
 const ALERTS = "https://ww1.sunat.gob.pe/ol-ti-itvisornoti/visor/consultarAlertas";
 const EXIT = "https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm";
+/** Tope por petición (25 s por defecto); `SUNAT_REQUEST_TIMEOUT_MS` (5–180 s) lo ajusta cuando el listado de una cuenta es más lento. */
+const requestTimeoutMs = (): number => {
+  const value = Number(process.env.SUNAT_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(value) && value >= 5_000 && value <= 180_000 ? Math.trunc(value) : 25_000;
+};
 const HOSTS = new Set(["www.sunat.gob.pe", "api-seguridad.sunat.gob.pe", "e-menu.sunat.gob.pe", "ww1.sunat.gob.pe"]);
 
 export interface SolLogin { ruc: string; solUser: string; password: string }
@@ -86,7 +91,7 @@ export class SunatHttpSession implements InventoryClient {
       else headers.delete("Cookie");
       let response: Response;
       try {
-        response = await this.fetcher(url, { method, body, headers, redirect: "manual", signal: AbortSignal.timeout(25_000) });
+        response = await this.fetcher(url, { method, body, headers, redirect: "manual", signal: AbortSignal.timeout(requestTimeoutMs()) });
         for (const setCookie of response.headers.getSetCookie()) await this.cookies.setCookie(setCookie, url.href);
       } catch { throw new AppError("remote_unavailable"); }
       if (![301, 302, 303, 307, 308].includes(response.status)) return { response, url };

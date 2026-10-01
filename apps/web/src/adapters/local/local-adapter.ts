@@ -419,6 +419,7 @@ export class LocalAdapter implements BuzonAdapter {
 			accountId,
 			connection: this.connectionOf(account),
 			boxes,
+			initialLoad: { done: true, active: false },
 			newItems: this.items
 				.filter((i) => i.accountId === accountId && i.isNew)
 				.sort((a, b) => b.firstSeenAt.localeCompare(a.firstSeenAt))
@@ -508,7 +509,7 @@ export class LocalAdapter implements BuzonAdapter {
 		if (!account.active) throw new AppError("paused");
 	}
 
-	async startInventory(accountId: AccountId): Promise<CommandResult<InventoryRun>> {
+	async startInventory(accountId: AccountId, _options?: { full?: boolean }): Promise<CommandResult<InventoryRun>> {
 		await this.wait();
 		try {
 			const { account, user } = this.requireAccount(accountId, "run_inventory");

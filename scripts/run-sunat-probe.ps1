@@ -11,6 +11,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    # Sin pnpm global: shim temporal sobre `corepack pnpm` para este proceso y sus hijos.
+    $shim = Join-Path ([IO.Path]::GetTempPath()) 'buzon-pnpm-shim'
+    New-Item -ItemType Directory -Path $shim -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $shim 'pnpm.cmd') -Value "@echo off`r`ncorepack pnpm %*" -Encoding ascii
+    $env:PATH = "$shim;$env:PATH"
+    $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+}
 $Names = @($Names | ForEach-Object { $_ -split ',' } | Where-Object { $_ })  # `pwsh -File` no separa arreglos por comas.
 function Read-Saved([string]$name) {
     $leaf = if ($name) { "sunat-test-credential-$name.clixml" } else { 'sunat-test-credential.clixml' }
@@ -33,7 +41,9 @@ try {
             password = ConvertFrom-SecureString $saved.Password -AsPlainText
         }
     }
-    $payload = if ($Names.Count -gt 0) { @{ accounts = $entries } | ConvertTo-Json -Depth 4 -Compress } else { $entries[0] | ConvertTo-Json -Compress }
+    # Solo isolation-check y e2e-* aceptan varias cuentas; los demás modos reciben una sola credencial plana (la primera de -Names).
+    $multi = $Mode -in 'isolation-check','e2e-persist','e2e-archive'
+    $payload = if ($Names.Count -gt 0 -and $multi) { @{ accounts = $entries } | ConvertTo-Json -Depth 4 -Compress } else { $entries[0] | ConvertTo-Json -Compress }
     $env:SUNAT_PROBE_MINUTES = [string]$Minutes
     $env:E2E_ARCHIVE_ITEMS = [string]$Items
     if ($Files) { $env:E2E_ARCHIVE_FILES = '1' }

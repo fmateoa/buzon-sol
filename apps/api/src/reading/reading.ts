@@ -38,7 +38,7 @@ export class ReadingService {
       try {
         await addJob<ReadJob>(READ_QUEUE, "read", { accountId, eventId: event.id },
           // Retries only cover a busy account lock: the processor never repeats a remote call for one event.
-          { jobId: event.id, attempts: 6, backoff: { type: "fixed", delay: 5_000 }, removeOnComplete: true, removeOnFail: true });
+          { jobId: event.id, attempts: 36, backoff: { type: "fixed", delay: 5_000 }, removeOnComplete: true, removeOnFail: true });
       } catch {
         // The event stays `pending`: the next request with the same key queues it again.
         throw new AppError("remote_unavailable");

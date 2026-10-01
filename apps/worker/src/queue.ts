@@ -2,10 +2,11 @@ import { Queue, Worker } from "bullmq";
 import { DataSource } from "typeorm";
 import { AppError, FILE_QUEUE, INVENTORY_QUEUE, redisOptions, type FileJob, type InventoryJob, logEvent } from "@buzon-sol/domain";
 import { type InventoryClient } from "@buzon-sol/sunat-adapter";
-import { InventoryRunner } from "./inventory.js";
+import { InventoryRunner, type RunOutcome } from "./inventory.js";
 import { planReadAttachmentDownloads, type EnqueueFileFetch } from "./read-attachments.js";
-import { planArchive, type EnqueueArchive } from "./archive.js";
+import { planArchive, type EnqueueArchive } from "./archive-plan.js";
 import { enqueueArchiveRun } from "./archive-queue.js";
+import { INVENTORY_RETRY_MS, INVENTORY_YIELD_MS, MAX_INVENTORY_DEFERRALS, isBusy, postpone } from "./postpone.js";
 
 async function enqueueFileFetch(accountId: string, fetchId: string): Promise<void> {
   const queue = new Queue<FileJob>(FILE_QUEUE, { connection: redisOptions() });
@@ -16,24 +17,32 @@ async function enqueueFileFetch(accountId: string, fetchId: string): Promise<voi
   }
 }
 
-/** Production must supply a transport validated by the SUNAT integration plan. */
+/**
+ * Production must supply a transport validated by the SUNAT integration plan.
+ *
+ * The inventory is the long job of an account (minutes on a large mailbox), so it is the one that gives way: a busy
+ * account postpones it instead of failing it, and between pages it yields to a waiting user command and resumes
+ * from its checkpoint as the same queued job (same id, so orphan recovery keeps seeing it).
+ */
 export function startInventoryWorker(db: DataSource,
   clientForAccount: (accountId: string) => InventoryClient | Promise<InventoryClient>,
-  enqueueFile: EnqueueFileFetch = enqueueFileFetch, enqueueArchive: EnqueueArchive = enqueueArchiveRun): Worker<InventoryJob> {
-  return new Worker<InventoryJob>(INVENTORY_QUEUE, async (job) => {
+  enqueueFile: EnqueueFileFetch = enqueueFileFetch, enqueueArchive: EnqueueArchive = enqueueArchiveRun,
+  timing: { yieldMs?: number; retryMs?: number } = {}): Worker<InventoryJob> {
+  return new Worker<InventoryJob>(INVENTORY_QUEUE, async (job, token) => {
     const { accountId, runId } = job.data;
-    let client: InventoryClient | undefined;
+    let outcome: RunOutcome;
     try {
-      client = await clientForAccount(accountId);
-      await new InventoryRunner(db, client).run(accountId, runId);
+      // The runner opens (and closes) the session itself, once it holds the account lock.
+      outcome = await new InventoryRunner(db, () => clientForAccount(accountId)).run(accountId, runId);
     } catch (error) {
+      if (isBusy(error) && (job.data.deferrals ?? 0) < MAX_INVENTORY_DEFERRALS) {
+        return postpone(job, token, timing.retryMs ?? INVENTORY_RETRY_MS);
+      }
       await db.query("UPDATE sync_runs SET state='partial',error_code=? WHERE id=? AND account_id=? AND state='pending'",
         [error instanceof AppError ? error.code : "remote_unavailable", runId, accountId]);
       throw error;
-    } finally {
-      try { await client?.close?.(); }
-      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
     }
+    if (outcome === "yielded") return postpone(job, token, timing.yieldMs ?? INVENTORY_YIELD_MS, { count: false });
     // Content and files use their own session; the inventory session is already closed.
     let archiveRunId: string | null = null;
     try { archiveRunId = await planArchive(db, accountId, "inventory", enqueueArchive, { syncRunId: runId }); }

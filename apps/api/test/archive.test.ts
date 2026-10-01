@@ -203,7 +203,37 @@ test("mailbox archive settings, status and multi-account commands respect permis
         const inventoryJob = await inventoryQueue.getJob(mineA!.runId!);
         assert.deepEqual(inventoryJob?.data, { accountId: a, runId: mineA!.runId });
         await inventoryJob?.remove();
+
+        // Scan kind. The fixture above is a complete full pass, so this first run is incremental.
+        const kindOf = async (id: string) => ((await db.query("SELECT scan_kind FROM sync_runs WHERE id=?", [id])) as { scan_kind: string }[])[0].scan_kind;
+        const summaryOf = async () => (await request("GET", `/api/v1/accounts/${a}/summary`, viewer.token)).json().initialLoad;
+        assert.equal(await kindOf(mineA!.runId!), "incremental");
+        assert.deepEqual(await summaryOf(), { done: true, active: false }, "a run on a loaded account is not an initial load");
         await db.query("UPDATE sync_runs SET state='partial' WHERE id=?", [mineA!.runId]);
+
+        // An account that never completed a full pass starts with a full one and counts as loading until it completes.
+        await db.query("UPDATE sync_runs SET scan_kind='incremental' WHERE account_id=? AND state='complete'", [a]);
+        const first = await request("POST", `/api/v1/accounts/${a}/inventory`, operator.token, {});
+        assert.equal(first.statusCode, 201);
+        assert.equal(first.json().scanKind, "full");
+        assert.deepEqual(await summaryOf(), { done: false, active: true });
+        await (await inventoryQueue.getJob(first.json().id))?.remove();
+        await db.query("UPDATE sync_runs SET state='complete',finished_at=UTC_TIMESTAMP(6),boxes_json=? WHERE id=?",
+          [JSON.stringify(["messages", "notifications"]), first.json().id]);
+        assert.deepEqual(await summaryOf(), { done: true, active: false });
+
+        // With a recent complete full pass the next run is incremental, unless a full one is asked for.
+        const incremental = await request("POST", `/api/v1/accounts/${a}/inventory`, operator.token, {});
+        assert.equal(incremental.json().scanKind, "incremental");
+        assert.equal(await kindOf(incremental.json().id), "incremental");
+        await (await inventoryQueue.getJob(incremental.json().id))?.remove();
+        await db.query("UPDATE sync_runs SET state='partial' WHERE id=?", [incremental.json().id]);
+        const forced = await request("POST", `/api/v1/accounts/${a}/inventory`, operator.token, { full: true });
+        assert.equal(forced.json().scanKind, "full");
+        assert.equal(await kindOf(forced.json().id), "full");
+        assert.equal((await request("POST", `/api/v1/accounts/${a}/inventory`, operator.token, { full: "yes" })).statusCode, 400);
+        await (await inventoryQueue.getJob(forced.json().id))?.remove();
+        await db.query("UPDATE sync_runs SET state='partial' WHERE id=?", [forced.json().id]);
       } finally {
         await archiveQueue.close();
         await inventoryQueue.close();

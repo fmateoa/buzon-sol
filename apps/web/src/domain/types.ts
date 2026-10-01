@@ -221,6 +221,11 @@ export interface MailboxSummary {
 	accountId: AccountId;
 	connection: ConnectionStatus;
 	boxes: Record<MailBox, BoxSummary>;
+	/**
+	 * Carga inicial de la cuenta: `done` cuando ya hubo un recorrido completo; `active` mientras no lo hubo y hay una
+	 * corrida en cola o en curso. El buzón se puede revisar con lo ya cargado (lo más reciente llega primero).
+	 */
+	initialLoad: { done: boolean; active: boolean };
 	/** Nuevos desde la última visita del usuario (sin cuerpo). */
 	newItems: MailItemMetadata[];
 	pending: PendingIssue[];
@@ -278,7 +283,10 @@ export interface BoxRunProgress {
 export interface InventoryRun {
 	id: RunId;
 	accountId: AccountId;
-	mode: "manual" | "scheduled" | "test";
+	/** `initial`: primera carga de la cuenta, lanzada por el sistema al validarse su credencial. */
+	mode: "manual" | "scheduled" | "test" | "initial";
+	/** `incremental` se detiene en la primera página sin novedades; `full` recorre toda la bandeja. */
+	scanKind?: "full" | "incremental";
 	startedAt: IsoDateTime;
 	finishedAt: IsoDateTime | null;
 	boxes: MailBox[];

@@ -26,9 +26,16 @@ export function parseCookies(header: unknown): Record<string, string> {
 
 const secure = () => (process.env.SESSION_COOKIE_SECURE ?? String(process.env.NODE_ENV === "production")) === "true";
 
+/**
+ * Con web y API en subdominios distintos (`app.x.com` / `api.x.com`) la cookie CSRF debe ser legible desde la web:
+ * `SESSION_COOKIE_DOMAIN=x.com` la comparte con los subdominios. La de sesión (HttpOnly) nunca lleva `Domain`.
+ */
+const csrfDomain = (): string | undefined => process.env.SESSION_COOKIE_DOMAIN?.trim().replace(/^\./, "") || undefined;
+
 function cookie(name: string, value: string, path: string, httpOnly: boolean, expires: Date): string {
+  const domain = httpOnly ? undefined : csrfDomain();
   return [`${name}=${value}`, `Path=${path}`, `Expires=${expires.toUTCString()}`, "SameSite=Strict",
-    ...(httpOnly ? ["HttpOnly"] : []), ...(secure() ? ["Secure"] : [])].join("; ");
+    ...(domain ? [`Domain=${domain}`] : []), ...(httpOnly ? ["HttpOnly"] : []), ...(secure() ? ["Secure"] : [])].join("; ");
 }
 
 export function setSessionCookies(reply: FastifyReply, token: string, expiresAt: Date): void {

@@ -50,7 +50,7 @@ test("configured boxes, auxiliary catalogs, bounded reauthentication and new-ite
       async visorHtml() { return { contentType: "text/html", body: fixture("visor-master.html") }; },
       async consultAlerts() { return { contentType: "text/html", body: "<html>login</html>" }; },
     };
-    const runner = new InventoryRunner(db, first);
+    const runner = new InventoryRunner(db, () => first);
     const firstRun = await runner.createRun(accountId, "test", ["notifications"]);
     await runner.run(accountId, firstRun);
     assert.equal(calls.some((call) => call.startsWith("messages")), false);
@@ -76,7 +76,7 @@ test("configured boxes, auxiliary catalogs, bounded reauthentication and new-ite
       async reauthenticate() { reauths++; },
     };
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const secondRunner = new InventoryRunner(db, second);
+    const secondRunner = new InventoryRunner(db, () => second);
     const secondRun = await secondRunner.createRun(accountId, "test");
     await secondRunner.run(accountId, secondRun);
     const secondState: { state: string; reauth_count: number; labels_state: string; new_messages: number; new_notifications: number }[] =
@@ -95,7 +95,7 @@ test("configured boxes, auxiliary catalogs, bounded reauthentication and new-ite
       async listPage() { return { contentType: "text/html", body: "<html></html>" }; },
       async reauthenticate() {},
     };
-    const thirdRunner = new InventoryRunner(db, always);
+    const thirdRunner = new InventoryRunner(db, () => always);
     const thirdRun = await thirdRunner.createRun(accountId, "test");
     await assert.rejects(thirdRunner.run(accountId, thirdRun, 500, 2),
       (error) => error instanceof AppError && error.code === "remote_session_expired");

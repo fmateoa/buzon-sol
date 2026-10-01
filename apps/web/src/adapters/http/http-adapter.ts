@@ -455,6 +455,7 @@ export class HttpAdapter implements BuzonAdapter {
 			accountId,
 			connection,
 			boxes: { messages: box("messages"), notifications: box("notifications") },
+			initialLoad: summary.initialLoad ?? { done: true, active: false },
 			newItems: fresh.rows.map((r) => toMetadata(accountId, r, this.userName)),
 			pending,
 			scheduleText: scheduleSummaryText(schedule ?? { state: connection.scheduleState, frequency: "1h", days: [], pauseReason: connection.pauseReason }),
@@ -522,9 +523,9 @@ export class HttpAdapter implements BuzonAdapter {
 		return toRun(accountId, run ?? { id: runId, mode: "manual", state: "pending", startedAt: null, finishedAt: null, resumeBox: 1, resumePage: 1, errorCode: null, boxes: null, newMessages: null, newNotifications: null });
 	}
 
-	startInventory = (accountId: AccountId) =>
+	startInventory = (accountId: AccountId, options?: { full?: boolean }) =>
 		run(async () => {
-			const { id } = await this.http.post<{ id: string }>(`/accounts/${accountId}/inventory`);
+			const { id } = await this.http.post<{ id: string }>(`/accounts/${accountId}/inventory`, options?.full ? { full: true } : undefined);
 			return this.queuedRun(accountId, id);
 		});
 

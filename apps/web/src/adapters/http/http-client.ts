@@ -17,6 +17,12 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<AppErrorCode>([
 	"validation",
 ]);
 
+/**
+ * Misma origen por defecto (`/api/v1`, con proxy). Con la API en otro subdominio, `VITE_API_URL`
+ * (origen sin barra final, p. ej. `https://api.buzon.example.com`) se fija al compilar la web.
+ */
+export const apiBaseUrl = (): string => `${String(import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "")}/api/v1`;
+
 const CSRF_COOKIE = "bz_csrf";
 
 /** Valor de la cookie CSRF (la de sesión es HttpOnly y JavaScript no puede leerla). */
@@ -32,7 +38,7 @@ const csrfToken = (): string | null => {
  * sesión. Los POST/PATCH devuelven la cookie CSRF en `X-CSRF-Token`.
  */
 export class HttpClient {
-	constructor(private readonly baseUrl = "/api/v1") {}
+	constructor(private readonly baseUrl = apiBaseUrl()) {}
 
 	private async fail(response: Response): Promise<never> {
 		const code = await response
@@ -45,7 +51,7 @@ export class HttpClient {
 
 	/** Archivo guardado, entregado por el proxy autenticado de la API (nunca una URL de SUNAT). */
 	async blob(path: string): Promise<Blob> {
-		const response = await fetch(`${this.baseUrl}${path}`, { method: "GET", cache: "no-store", credentials: "same-origin" });
+		const response = await fetch(`${this.baseUrl}${path}`, { method: "GET", cache: "no-store", credentials: "include" });
 		if (!response.ok) return this.fail(response);
 		return response.blob();
 	}
@@ -56,7 +62,7 @@ export class HttpClient {
 		if (csrf) headers["X-CSRF-Token"] = csrf;
 		// Sin cuerpo no se declara JSON: Fastify rechaza un cuerpo JSON vacío.
 		if (body !== undefined) headers["Content-Type"] = "application/json";
-		const response = await fetch(`${this.baseUrl}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", credentials: "same-origin" });
+		const response = await fetch(`${this.baseUrl}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", credentials: "include" });
 		if (response.ok) {
 			if (response.status === 204) return undefined as T;
 			return (response.headers.get("content-type") ?? "").includes("json") ? ((await response.json()) as T) : ((await response.text()) as T);

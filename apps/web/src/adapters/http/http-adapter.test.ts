@@ -147,7 +147,7 @@ describe("HttpAdapter · buzón", () => {
 		folderCode: null, labelCode: "16", labelName: "AVISOS", attachmentCount: 1, starred: false, urgent: true, reviewed: false, reviewedAt: null, contentStored: false, openedByUser: false, ...over,
 	});
 	const runDto = (over: Record<string, unknown> = {}) => ({ id: "r1", mode: "manual", state: "running", startedAt: at, finishedAt: null, resumeBox: 2, resumePage: 3, errorCode: null, boxes: '["messages","notifications"]', newMessages: null, newNotifications: null, ...over });
-	const summary = { state: "running", verified: false, pendingReview: { messages: 2, notifications: 0 }, failedFiles: 1, newSince: at, boxes: { messages: { uniqueCount: 50, unreadInSunat: 7 }, notifications: { uniqueCount: 5, unreadInSunat: 0 } } };
+	const summary = { state: "running", verified: false, initialLoad: { done: false, active: true }, pendingReview: { messages: 2, notifications: 0 }, failedFiles: 1, newSince: at, boxes: { messages: { uniqueCount: 50, unreadInSunat: 7 }, notifications: { uniqueCount: 5, unreadInSunat: 0 } } };
 	const activity = (over: Record<string, unknown> = {}) => ({
 		current: runDto(over),
 		pages: [{ tipoMsj: 1, pagesScanned: 3, received: 50, declaredRecords: 40, declaredPages: 2 }, { tipoMsj: 2, pagesScanned: 2, received: 30, declaredRecords: 30, declaredPages: 9 }],
@@ -178,6 +178,7 @@ describe("HttpAdapter · buzón", () => {
 		expect(result.newItems.map((i) => i.id)).toEqual(["i9"]);
 		expect(result.pending.map((p) => p.kind)).toEqual(["failed_downloads", "pending_review"]);
 		expect(result.scheduleText).toBe("En pausa");
+		expect(result.initialLoad).toEqual({ done: false, active: true });
 		const activityView = await adapter.getActivity("a1" as AccountId);
 		expect(activityView.currentRun).toMatchObject({ id: "r1", state: "running", resultText: "En curso" });
 		expect(activityView.progress).toMatchObject([
@@ -249,6 +250,9 @@ describe("HttpAdapter · buzón", () => {
 			"GET /accounts/a1/labels": () => ({ json: { items: [{ code: "16", name: "AVISOS", color: "#d45aed" }] } }),
 		});
 		expect(await adapter.startInventory("a1" as AccountId)).toMatchObject({ ok: true, data: { id: "r5", state: "pending", resultText: "En cola" } });
+		expect(calls.find((c) => c.key === "POST /accounts/a1/inventory")?.body).toBeUndefined();
+		expect(await adapter.startInventory("a1" as AccountId, { full: true })).toMatchObject({ ok: true });
+		expect(calls.filter((c) => c.key === "POST /accounts/a1/inventory").at(-1)?.body).toEqual({ full: true });
 		expect(await adapter.startAllInventories()).toEqual({ ok: true, data: [{ accountId: "a1", alias: "Cuenta Demo", started: true, errorCode: null }, { accountId: "a2", alias: "Cuenta", started: false, errorCode: "needs_credential" }] });
 		expect(await adapter.startArchive("a1" as AccountId, true)).toMatchObject({ ok: true, data: { accountId: "a1", items: { pendingContent: 4 }, current: { trigger: "inventory", state: "running" } } });
 		expect(calls.find((c) => c.key === "POST /accounts/a1/archive")?.body).toEqual({ retryFailed: true });

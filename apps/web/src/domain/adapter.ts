@@ -152,7 +152,8 @@ export interface BuzonAdapter {
 	getActivity(accountId: AccountId): Promise<AccountActivity>;
 
 	// Comandos semánticos del buzón
-	startInventory(accountId: AccountId): Promise<CommandResult<InventoryRun>>;
+	/** `full: true` fuerza el recorrido completo aunque uno reciente permita uno incremental. */
+	startInventory(accountId: AccountId, options?: { full?: boolean }): Promise<CommandResult<InventoryRun>>;
 	resumeRun(accountId: AccountId, runId: RunId): Promise<CommandResult<InventoryRun>>;
 	readContent(accountId: AccountId, itemId: ItemId, idempotencyKey: string): Promise<CommandResult<MailDetail>>;
 	downloadFile(accountId: AccountId, itemId: ItemId, fileId: FileId, onProgress?: (progress: number) => void): Promise<CommandResult<MailFile>>;

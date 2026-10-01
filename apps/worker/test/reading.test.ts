@@ -10,7 +10,7 @@ test("explicit read persists safe content and does not repeat a remote call", { 
   const roleId = randomUUID(), userId = randomUUID();
   let calls = 0;
   let observations = 0;
-  const processor = new ReadProcessor(db, {
+  const processor = new ReadProcessor(db, () => ({
     async readDetail() {
       calls++;
       return { body: '<p>Ficticio</p><script>bad()</script><a href="javascript:bad()">link</a>', updateLeido: true,
@@ -18,7 +18,7 @@ test("explicit read persists safe content and does not repeat a remote call", { 
           { kind: "attachment" as const, codArchivo: 0, name: "ficticio.pdf" }] };
     },
     async observeState() { return ++observations === 1 ? 0 : 1; },
-  });
+  }));
   try {
     await db.query("INSERT INTO sunat_accounts (id,alias,ruc_ciphertext,sol_user_ciphertext) VALUES (?,?,?,?)",
       [accountId, "Fixture", Buffer.from("fictional"), Buffer.from("fictional")]);
@@ -51,10 +51,10 @@ test("explicit read persists safe content and does not repeat a remote call", { 
       [jsonItemId, accountId, 2, "456", 1, JSON.stringify({ codMensaje: 456 })]);
     await db.query("INSERT INTO mail_read_events (id,item_id,account_id,actor_user_id,idempotency_key,status,remote_before) VALUES (?,?,?,?,?,?,?)",
       [jsonEventId, jsonItemId, accountId, userId, "test-read-json", "pending", 1]);
-    await new ReadProcessor(db, {
+    await new ReadProcessor(db, () => ({
       async readDetail() { return { body: '{"text":"<script>bad()</script>"}', indTexto: "3", updateLeido: false }; },
       async observeState() { return 1; },
-    }).process(accountId, jsonEventId);
+    })).process(accountId, jsonEventId);
     const jsonBody: { original_body: string; safe_body: string }[] = await db.query(
       "SELECT original_body,safe_body FROM mail_details WHERE item_id=?", [jsonItemId]);
     assert.equal(jsonBody[0].original_body, '{"text":"<script>bad()</script>"}');
@@ -65,8 +65,8 @@ test("explicit read persists safe content and does not repeat a remote call", { 
     await db.query("INSERT INTO mail_read_events (id,item_id,account_id,actor_user_id,idempotency_key,status,remote_before) VALUES (?,?,?,?,?,?,?)",
       [failedId, itemId, accountId, userId, "test-read-two", "pending", 1]);
     let failedCalls = 0;
-    const failing = new ReadProcessor(db, { async readDetail() { failedCalls++; throw new Error("remote failed after opening"); },
-      async observeState() { return null; } });
+    const failing = new ReadProcessor(db, () => ({ async readDetail() { failedCalls++; throw new Error("remote failed after opening"); },
+      async observeState() { return null; } }));
     await assert.rejects(failing.process(accountId, failedId));
     await failing.process(accountId, failedId);
     assert.equal(failedCalls, 1);

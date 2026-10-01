@@ -1,0 +1,60 @@
+# Producción: API, worker, migraciones, Redis y web. Sin MySQL ni MinIO: la base y el almacenamiento S3 son externos.
+# Archivos de configuración que se crean en el servidor (ninguno está en git; plantillas con extensión .example):
+#   apps/api/.env             backend común (API, migraciones y worker): DB_*, S3_*, claves SOL públicas, puertas SUNAT_*, CORS_ALLOWED_ORIGINS, SESSION_COOKIE_DOMAIN
+#   apps/worker/.env          solo worker (opcional): SOL_PRIVATE_KEY_PEM y claves previas; la API no debe recibir la clave privada
+#   apps/web/.env.production  frontend: VITE_API_URL (se compila dentro de la imagen; cambiarlo exige reconstruir `web`)
+# Las puertas SUNAT_* siguen apagadas hasta que el operador las active con la prueba del plan 02 superada.
+# nginx (en el host) termina TLS: <dominio web> -> 127.0.0.1:38081 y api.<dominio> -> 127.0.0.1:38080; ver deploy/nginx/buzon.conf.
+#   docker compose -f compose.prod.yml -p buzon up -d --build
+x-app: &app
+  build: .
+  image: buzon-sol:prod
+  env_file: apps/api/.env
+  restart: unless-stopped
+  environment: &app-env
+    NODE_ENV: production
+    REDIS_URL: redis://redis:6379
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes: [buzon_redis:/data]
+
+  migrate:
+    <<: *app
+    command: ["pnpm", "--filter", "@buzon-sol/api", "migration:run"]
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["pnpm", "--filter", "@buzon-sol/api", "start"]
+    environment:
+      <<: *app-env
+      API_PORT: "3000"
+    ports: ["127.0.0.1:38080:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  worker:
+    <<: *app
+    env_file:
+      - apps/api/.env
+      - { path: apps/worker/.env, required: false }
+    command: ["pnpm", "--filter", "@buzon-sol/worker", "start"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: buzon-sol-web:prod
+    restart: unless-stopped
+    ports: ["127.0.0.1:38081:80"]
+
+volumes:
+  buzon_redis:

@@ -1,4 +1,4 @@
-# API and worker image for local development. Both run TypeScript through tsx; the frontend is not included.
+# API and worker image (compose.dev.yml and compose.prod.yml). Both run TypeScript through tsx; the frontend is not included.
 FROM node:24-bookworm-slim
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 CI=true
 RUN corepack enable

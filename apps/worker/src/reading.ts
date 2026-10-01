@@ -1,5 +1,5 @@
 import { DataSource } from "typeorm";
-import { AppError, type MailBox } from "@buzon-sol/domain";
+import { AppError, logEvent, type MailBox } from "@buzon-sol/domain";
 import { storeDetail, type DetailFile } from "./detail-store.js";
 import { tryAccountLock } from "./account-lock.js";
 
@@ -14,13 +14,17 @@ export interface ReadClient {
   close?(): Promise<void>;
 }
 
+/** Opens one session for one account; called only after the lock and the authorization checks. */
+export type ReadClientFactory = () => ReadClient | Promise<ReadClient>;
+
 export class ReadProcessor {
-  constructor(private readonly db: DataSource, private readonly client: ReadClient) {}
+  constructor(private readonly db: DataSource, private readonly clientFactory: ReadClientFactory) {}
 
   /** A pending event is durable before this method can contact SUNAT. */
   async process(accountId: string, eventId: string): Promise<void> {
     const lock = await tryAccountLock(this.db, accountId);
     if (!lock) throw new AppError("conflict_running");
+    let client: ReadClient | undefined;
     try {
       const rows: { id: string; status: string; item_id: string; actor_user_id: string | null; tipo_msj: number; cod_mensaje: string; ind_estado: number }[] =
         await this.db.query(`SELECT e.id,e.status,e.item_id,e.actor_user_id,i.tipo_msj,i.cod_mensaje,i.ind_estado
@@ -32,26 +36,30 @@ export class ReadProcessor {
       if (event.status === "calling") {
         // A previous process may have reached SUNAT. Reopening could repeat an irreversible read.
         await this.db.query("UPDATE mail_read_events SET status='uncertain',finished_at=UTC_TIMESTAMP(6) WHERE id=?", [eventId]);
+        logEvent("warn", "read_event_uncertain", { accountId, eventId, errorCode: "interrupted" });
         return;
       }
       const authorized: { id: string }[] = event.actor_user_id ? await this.db.query(
         `SELECT u.id FROM app_users u JOIN roles r ON r.id=u.role_id
          JOIN role_permissions rp ON rp.role_id=r.id AND rp.permission='read_content'
+         JOIN sunat_accounts a ON a.id=? AND a.active=true
          WHERE u.id=? AND u.status='active' AND
            (r.all_accounts=true OR EXISTS
-             (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=?))`,
-        [event.actor_user_id, accountId]) : [];
+             (SELECT 1 FROM role_sunat_accounts ra WHERE ra.role_id=r.id AND ra.account_id=a.id))`,
+        [accountId, event.actor_user_id]) : [];
       if (!authorized.length) {
         await this.db.query("UPDATE mail_read_events SET status='denied',finished_at=UTC_TIMESTAMP(6) WHERE id=?", [eventId]);
         throw new AppError("forbidden");
       }
-      await this.db.query("UPDATE mail_read_events SET status='calling' WHERE id=? AND status='pending'", [eventId]);
       const box: MailBox = event.tipo_msj === 1 ? "messages" : "notifications";
+      // A login failure happens before any detail request, so the event stays `pending` rather than `uncertain`.
+      client = await this.clientFactory();
+      await this.db.query("UPDATE mail_read_events SET status='calling' WHERE id=? AND status='pending'", [eventId]);
       try {
-        const detail = await this.client.readDetail(box, event.cod_mensaje);
+        const detail = await client.readDetail(box, event.cod_mensaje);
         let observed: number | null = null;
         for (let attempt = 0; attempt < 4; attempt++) {
-          try { observed = await this.client.observeState(box, event.cod_mensaje); }
+          try { observed = await client.observeState(box, event.cod_mensaje); }
           catch { break; /* The remote transition is unconfirmed; preserve the fetched body. */ }
           if (event.ind_estado !== 0 || detail.updateLeido !== true || observed !== 0) break;
           if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1_000));
@@ -67,9 +75,12 @@ export class ReadProcessor {
         });
       } catch (error) {
         await this.db.query("UPDATE mail_read_events SET status='uncertain',finished_at=UTC_TIMESTAMP(6) WHERE id=?", [eventId]);
+        logEvent("warn", "read_event_uncertain", { accountId, eventId, errorCode: error instanceof AppError ? error.code : "unexpected" });
         throw error;
       }
     } finally {
+      try { await client?.close?.(); }
+      catch { logEvent("warn", "sunat_session_cleanup_failed", { accountId }); }
       await lock.release();
     }
   }
