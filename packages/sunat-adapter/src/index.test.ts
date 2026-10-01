@@ -55,3 +55,9 @@ test("HTML, rows null and page guardrail never become a successful empty mailbox
     "messages", async () => {}, 1, 2),
     (error) => error instanceof AppError && error.code === "incomplete_inventory");
 });
+
+test("label queries mix boxes only when the caller opts in", () => {
+  const mixed = json([{ codMensaje: 1, indTipmsj: 1, indEstado: 1 }, { codMensaje: 2, indTipmsj: 2, indEstado: 1 }]);
+  assert.equal(parseInventoryPage(mixed, "any").rows.length, 2);
+  assert.throws(() => parseInventoryPage(mixed, "messages"), (error) => error instanceof AppError && error.code === "schema_changed");
+});

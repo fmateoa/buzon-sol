@@ -21,6 +21,8 @@ export interface SolDetail {
 }
 export interface SolFileResponse { status: number; contentType: string; bytes: Buffer; filename?: string | null;
   verifiedGeneratedDocument?: boolean }
+/** Filtros remotos observados; el filtro exacto por estado se aplica localmente sobre `indEstado`. */
+export interface ListFilter { desAsunto?: string; tipoOrden?: string; codEtiqueta?: string }
 export interface SolFolder { codCarpeta: string; nomCarpeta: string; cantMensajes: number | null }
 export interface SolLabel { codEtiqueta: string; descEtiqueta: string; colorEtiqueta: string | null; cantEtiqueta: number | null }
 
@@ -137,6 +139,10 @@ export class SunatHttpSession implements InventoryClient {
       originalUrl: loginUrl.searchParams.get("originalUrl")!, state: loginUrl.searchParams.get("state")! });
     const menu = await this.html(actionUrl, { method: "POST", body: fields,
       headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+    // Observado: una credencial rechazada termina en .../oauth2/error, no en el menú.
+    if (menu.url.hostname === "api-seguridad.sunat.gob.pe" && menu.url.pathname.endsWith("/error")) {
+      throw new AppError("invalid_credential");
+    }
     if (menu.url.hostname !== "e-menu.sunat.gob.pe" || menu.url.searchParams.get("exe") !== "buzon" ||
         !menu.body.includes(this.credential.ruc)) throw new AppError("schema_changed");
     this.menuReached = true;
@@ -163,16 +169,16 @@ export class SunatHttpSession implements InventoryClient {
     }
   }
 
-  async listPage(box: MailBox, page: number): Promise<PageResponse> {
+  async listPage(box: MailBox, page: number, filter: ListFilter = {}): Promise<PageResponse> {
     if (this.closed || !this.masterUrl) throw new AppError("remote_unavailable");
-    const first = await this.fetchListPage(box, page);
+    const first = await this.fetchListPage(box, page, filter);
     if (!this.expired(first)) return first;
     await this.cookies.removeAllCookies();
     this.menuReached = false;
     this.masterUrl = null;
     this.masterHtml = null;
     await this.login();
-    const retry = await this.fetchListPage(box, page);
+    const retry = await this.fetchListPage(box, page, filter);
     if (this.expired(retry)) throw new AppError("remote_session_expired");
     return retry;
   }
@@ -184,11 +190,13 @@ export class SunatHttpSession implements InventoryClient {
     catch { return false; }
   }
 
-  private async fetchListPage(box: MailBox, page: number): Promise<PageResponse> {
+  private async fetchListPage(box: MailBox, page: number, filter: ListFilter): Promise<PageResponse> {
     if (!this.masterUrl) throw new AppError("remote_unavailable");
     const url = sunatUrl(LIST);
-    url.search = new URLSearchParams({ tipoMsj: box === "messages" ? "1" : "2", codCarpeta: "00",
-      codEtiqueta: "", page: String(page), des_asunto: "", codMensaje: "", tipoOrden: "NADA", _: String(Date.now()) }).toString();
+    const byLabel = !!filter.codEtiqueta; // La web navega por etiqueta con tipoMsj y codCarpeta vacíos.
+    url.search = new URLSearchParams({ tipoMsj: byLabel ? "" : box === "messages" ? "1" : "2", codCarpeta: byLabel ? "" : "00",
+      codEtiqueta: filter.codEtiqueta ?? "", page: String(page), des_asunto: filter.desAsunto ?? "", codMensaje: "",
+      tipoOrden: filter.tipoOrden ?? "NADA", _: String(Date.now()) }).toString();
     const { response } = await this.request(url, { headers: { "X-Requested-With": "XMLHttpRequest",
       "X-Ruc": this.credential.ruc, Referer: this.masterUrl.href } });
     if (response.status !== 200) throw new AppError("remote_unavailable");
@@ -370,10 +378,27 @@ export class SunatHttpSession implements InventoryClient {
     this.closed = true;
     try {
       if (this.menuReached) {
-        for (const action of ["prevApp", "salir"]) {
-          await this.request(sunatUrl(EXIT), { method: "POST", body: new URLSearchParams({ action }),
-            headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        const exit = (action: string) => this.request(sunatUrl(EXIT), { method: "POST", body: new URLSearchParams({ action }),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        // `prevApp` responde con la ruta de cierre del visor; el navegador la carga antes de `salir`.
+        const prev = await exit("prevApp");
+        const logoutPath = (await prev.response.text().catch(() => "")).trim();
+        if (this.masterUrl && /^\/ol-ti-itvisornoti\/visor\/master\?logout$/.test(logoutPath)) {
+          try {
+            // Replica `iframeAnterior` del menú: el servicio de tiempo de la aplicación cierra la sesión del visor anterior.
+            const jarCookies = await this.cookies.getCookies(this.masterUrl.href);
+            const random = jarCookies.map((cookie) => cookie.key.match(/^(\d+)BOT20260$/)?.[1]).find(Boolean) ??
+              String(Math.floor(Math.random() * 9e10) + 1e10);
+            const url = sunatUrl("/time/gettime.pl", this.masterUrl.href);
+            url.search = new URLSearchParams({ a: "o", l: random, u: logoutPath }).toString();
+            await this.request(url, { headers: { Referer: this.masterUrl.href } });
+            // La página devuelta ejecuta `POST <ruta de cierre>` con cuerpo `logout` como XHR; sin ese POST la sesión sigue activa.
+            await this.request(sunatUrl(logoutPath, this.masterUrl.href), { method: "POST", body: "logout",
+              headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest",
+                Referer: url.href } });
+          } catch { /* El cierre del menú y el descarte local continúan. */ }
         }
+        await exit("salir");
       }
     } finally { await this.cookies.removeAllCookies(); this.masterUrl = null; this.masterHtml = null; }
   }

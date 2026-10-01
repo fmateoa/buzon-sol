@@ -1,13 +1,19 @@
 <# Guarda una credencial de prueba cifrada con DPAPI para el usuario de Windows actual. #>
 [CmdletBinding()]
-param([switch]$Delete)
+param(
+    [ValidatePattern('^[A-Za-z0-9_-]{0,20}$')][string]$Name = '',
+    [switch]$Delete,
+    [switch]$All
+)
 
 $ErrorActionPreference = 'Stop'
 $directory = Join-Path $env:LOCALAPPDATA 'BuzonSol'
-$path = Join-Path $directory 'sunat-test-credential.clixml'
+$leaf = if ($Name) { "sunat-test-credential-$Name.clixml" } else { 'sunat-test-credential.clixml' }
+$path = Join-Path $directory $leaf
 
 if ($Delete) {
-    Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue
+    if ($All) { Get-ChildItem -LiteralPath $directory -Filter 'sunat-test-credential*.clixml' -ErrorAction SilentlyContinue | Remove-Item }
+    else { Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue }
     Write-Output 'Credencial de prueba eliminada.'
     return
 }

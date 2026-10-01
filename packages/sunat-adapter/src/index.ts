@@ -23,7 +23,8 @@ export interface InventoryClient {
   close?(): Promise<void>;
 }
 
-export function parseInventoryPage(response: PageResponse, box: MailBox): ParsedPage {
+/** `any` es solo para consultas por etiqueta, que la web hace sin `tipoMsj` y mezclan ambas bandejas. */
+export function parseInventoryPage(response: PageResponse, box: MailBox | "any"): ParsedPage {
   const type = response.contentType.toLowerCase();
   if (type.includes("text/html") || /^\s*<!doctype html|^\s*<html/i.test(response.body)) {
     throw new AppError("remote_session_expired");
@@ -39,14 +40,14 @@ export function parseInventoryPage(response: PageResponse, box: MailBox): Parsed
     throw new AppError("schema_changed");
   }
   const page = data as { rows: unknown[]; records?: unknown; total?: unknown };
-  const expectedType = box === "messages" ? 1 : 2;
+  const expectedType = box === "any" ? null : box === "messages" ? 1 : 2;
   const rows = page.rows.map((entry): SunatRow => {
     if (!entry || typeof entry !== "object") throw new AppError("schema_changed");
     const row = entry as Record<string, unknown>;
     const id = row.codMensaje;
     if ((typeof id !== "number" && typeof id !== "string") || !/^\d+$/.test(String(id)) ||
         typeof row.indEstado !== "number" || !Number.isInteger(row.indEstado) ||
-        (row.indTipmsj != null && Number(row.indTipmsj) !== expectedType)) {
+        (expectedType !== null && row.indTipmsj != null && Number(row.indTipmsj) !== expectedType)) {
       throw new AppError("schema_changed");
     }
     return { ...row, codMensaje: String(id), indEstado: row.indEstado };
@@ -97,4 +98,4 @@ export async function scanBox(
   throw new AppError("incomplete_inventory");
 }
 
-export { SunatHttpSession, type SolLogin, type SolDetail, type SolFileResponse, type SolFolder, type SolLabel } from "./http.js";
+export { SunatHttpSession, type SolLogin, type SolDetail, type SolFileResponse, type SolFolder, type SolLabel, type ListFilter } from "./http.js";

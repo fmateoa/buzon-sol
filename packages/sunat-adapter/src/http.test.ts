@@ -242,3 +242,96 @@ test("attachment zero and generated HTML follow their own detail in the same ses
       (error) => error instanceof AppError && error.code === "schema_changed");
   } finally { await session.close(); }
 });
+
+test("remote filters use observed parameters; label queries drop box and folder", async () => {
+  const queries: URLSearchParams[] = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.hostname === "www.sunat.gob.pe") return html(`<a href="${login}">Buzón</a>`);
+    if (url.pathname.endsWith("loginMenuSol")) return html('<form action="j_security_check"></form>');
+    if (url.pathname.endsWith("j_security_check")) {
+      return new Response(null, { status: 302, headers: { Location: "https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?exe=buzon" } });
+    }
+    if (url.pathname.endsWith("MenuInternet.htm") && init?.method === "POST") return new Response("", { headers: { "Content-Type": "text/plain" } });
+    if (url.searchParams.get("action") === "buzon") return new Response(null, { status: 302, headers: { Location: master } });
+    if (url.pathname.endsWith("MenuInternet.htm")) return html(
+      `<div>${credential.ruc}</div><script>function cargaBuzon(){logoutAndLoad('MenuInternet.htm?action=buzon');}</script>`);
+    if (url.pathname.endsWith("/visor/master")) return html("<main>Visor</main>");
+    if (url.pathname.endsWith("/visor/listNotiMenPag")) {
+      queries.push(url.searchParams);
+      return new Response(JSON.stringify({ rows: [] }), { headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error("Unexpected request");
+  };
+  const session = await SunatHttpSession.open(credential, fakeFetch);
+  try {
+    await session.listPage("messages", 1, { desAsunto: "ñandú", tipoOrden: "NO_LEIDOS" });
+    await session.listPage("notifications", 1, { codEtiqueta: "07" });
+  } finally { await session.close(); }
+  assert.equal(queries[0]?.get("des_asunto"), "ñandú");
+  assert.equal(queries[0]?.get("tipoOrden"), "NO_LEIDOS");
+  assert.equal(queries[0]?.get("tipoMsj"), "1");
+  assert.equal(queries[1]?.get("codEtiqueta"), "07");
+  assert.equal(queries[1]?.get("tipoMsj"), "");
+  assert.equal(queries[1]?.get("codCarpeta"), "");
+});
+
+test("rejected SOL credential ends at the error page and is invalid_credential, not schema_changed", async () => {
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.hostname === "www.sunat.gob.pe") return html(`<a href="${login}">Buzón</a>`);
+    if (url.pathname.endsWith("loginMenuSol")) return html('<form action="j_security_check"></form>');
+    if (url.pathname.endsWith("j_security_check")) {
+      return new Response(null, { status: 302, headers: { Location: "https://api-seguridad.sunat.gob.pe/v1/clientessol/client/oauth2/error" } });
+    }
+    if (url.pathname.endsWith("/error")) return html("<p>error</p>");
+    throw new Error("Unexpected request");
+  };
+  await assert.rejects(SunatHttpSession.open(credential, fakeFetch),
+    (error) => error instanceof AppError && error.code === "invalid_credential");
+});
+
+test("close replays the menu's remote exit: prevApp, gettime.pl, visor logout POST, then salir", async () => {
+  const calls: string[] = [];
+  let logoutBody = "";
+  const logoutPath = "/ol-ti-itvisornoti/visor/master?logout";
+  const fakeFetch: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.hostname === "www.sunat.gob.pe") return html(`<a href="${login}">Buzón</a>`);
+    if (url.pathname.endsWith("loginMenuSol")) return html('<form action="j_security_check"></form>');
+    if (url.pathname.endsWith("j_security_check")) {
+      return new Response(null, { status: 302, headers: { Location: "https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?exe=buzon" } });
+    }
+    if (url.pathname.endsWith("MenuInternet.htm") && init?.method === "POST") {
+      const action = new URLSearchParams(String(init.body)).get("action") ?? "";
+      calls.push(action);
+      if (action === "prevApp" && calls.filter((c) => c === "prevApp").length === 2) {
+        return new Response(logoutPath, { headers: { "Content-Type": "text/plain" } });
+      }
+      return new Response("", { headers: { "Content-Type": "text/plain" } });
+    }
+    if (url.searchParams.get("action") === "buzon") return new Response(null, { status: 302, headers: { Location: master } });
+    if (url.pathname.endsWith("MenuInternet.htm")) return html(
+      `<div>${credential.ruc}</div><script>function cargaBuzon(){logoutAndLoad('MenuInternet.htm?action=buzon');}</script>`);
+    if (url.pathname.endsWith("/visor/master") && !url.search.includes("logout")) return html("<main>Visor</main>");
+    if (url.pathname.endsWith("/time/gettime.pl")) {
+      calls.push("gettime");
+      assert.equal(url.searchParams.get("a"), "o");
+      assert.equal(url.searchParams.get("u"), logoutPath);
+      assert.equal(url.hostname, "ww1.sunat.gob.pe");
+      return html("<html></html>");
+    }
+    if (url.pathname.endsWith("/visor/master") && url.search === "?logout") {
+      calls.push("visor-logout");
+      assert.equal(init?.method, "POST");
+      logoutBody = String(init?.body);
+      assert.equal(new Headers(init?.headers).get("X-Requested-With"), "XMLHttpRequest");
+      return new Response("", { headers: { "Content-Type": "text/plain" } });
+    }
+    throw new Error("Unexpected request");
+  };
+  const session = await SunatHttpSession.open(credential, fakeFetch);
+  await session.close();
+  assert.deepEqual(calls, ["prevApp", "prevApp", "gettime", "visor-logout", "salir"]);
+  assert.equal(logoutBody, "logout");
+});

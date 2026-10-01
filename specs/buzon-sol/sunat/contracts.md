@@ -21,7 +21,7 @@ El formulario envía `POST .../oauth2/j_security_check`. No se almacena la contr
 
 **Prueba HTTP autorizada del 30/09/2026:** con cookie jar nuevo, el `POST j_security_check` redirigió a `e-menu.sunat.gob.pe` y terminó en `200` sin volver al formulario. El HTML final contenía la marca de la cuenta usada, comprobada sin imprimirla. Sin pasar por `/visor/master`, `listNotiMenPag` siguió respondiendo `200 application/json` con `rows:null` incluso con `X-Requested-With` y `X-Ruc`. Tras seguir la navegación del menú y pedir el HTML del visor, Mensajes y Notificaciones devolvieron `rows[]`. Esta secuencia se repitió dos veces con el adaptador de Node desde jars nuevos.
 
-El menú final tiene `exe=buzon`, pero su HTML no incluye una URL completa de `/visor/master`: se observaron seis iframes sin atributo `src`. `cargaBuzon()` llama a `logoutAndLoad(...)`; `POST action=prevApp` seguido de `GET action=buzon&s=ww1` entrega una redirección a la URL exacta del visor. No se fabrican `hc` ni `token`. La salida sigue sin validarse: `prevApp`/`salir` no invalidó el listado del visor en el mismo jar.
+El menú final tiene `exe=buzon`, pero su HTML no incluye una URL completa de `/visor/master`: se observaron seis iframes sin atributo `src`. `cargaBuzon()` llama a `logoutAndLoad(...)`; `POST action=prevApp` seguido de `GET action=buzon&s=ww1` entrega una redirección a la URL exacta del visor. No se fabrican `hc` ni `token`. La salida completa se valida en el §4: `prevApp` y `salir` solos no invalidan el visor.
 
 Al entrar en el visor, la web observada pidió el listado y luego abrió automáticamente el detalle del primer registro. Esa llamada puede cambiar un no leído a leído; por tanto el simple acceso a la interfaz no está demostrado como pasivo.
 
@@ -195,6 +195,8 @@ Además de marcar casillas en la interfaz, `LEIDOS` y `NO_LEIDOS` reordenaron fi
 ## 4. Salida y operaciones no incluidas
 
 **Salida confirmada:** el botón «Salir» envió `POST https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm` con `action=salir` después de `action=prevApp`, y devolvió al formulario. Reabrir el menú protegido volvió a pedir login.
+
+**Cierre remoto del visor (validado por HTTP el 30/09/2026, S-06):** `POST action=prevApp` responde con texto plano: la ruta de cierre de la aplicación anterior (`/ol-ti-itvisornoti/visor/master?logout`). El menú la pasa a `GET {dominio}/time/gettime.pl?a=o&l={randomCookie}&u={ruta}` (`dominio` = `https://{subdominio}.sunat.gob.pe`, aquí `ww1`; `randomCookie` es un número aleatorio generado por el navegador, usado como prefijo de la cookie `…BOT20260`). Esa página HTML ejecuta `POST {ruta}` con cuerpo `logout` (`application/x-www-form-urlencoded`, XHR). Después `POST action=salir`. La única cookie necesaria para el visor es `ITVISORNOTISESSION`. Observado: con `prevApp`+`salir` solos o con `GET …master?logout` solo, el visor siguió accesible; con la secuencia completa el acceso con el mismo jar se mantuvo 14 s y se perdió a los 20 s en tres ejecuciones (cierre asíncrono). Cerrar una sesión no afectó a otra sesión simultánea de la misma cuenta ni a una abierta justo después.
 
 **Solo detectados en el código, sin ejecutar:** `GET /ajax/crearCarpeta`, `/ajax/modificarCarpeta`, `/ajax/eliminarCarpeta`, `/ajax/moverACarpeta` (método por defecto de `$.ajax`, no comprobado en red); `POST /actualizarEstado` para `urgente` y `destacado`. No se encontró una acción «Marcar como no leído» en la interfaz inspeccionada. Estos servicios no son dependencia del lector en modo consulta.
 
