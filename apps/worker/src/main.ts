@@ -16,10 +16,16 @@ import { recoverOrphanArchiveRuns, recoverOrphanRuns } from "./recovery.js";
 import { dispatchDueSchedules } from "./scheduler.js";
 import { SunatFileClient } from "./sunat-file-client.js";
 
+/**
+ * Espera SIGINT/SIGTERM. Un temporizador mantiene vivo el proceso: sin puertas SUNAT no hay conexiones abiertas y,
+ * sin él, Node terminaría con código 0 justo después de `worker_idle` (y Docker lo reiniciaría en bucle).
+ */
 function waitForStop(): Promise<void> {
   return new Promise((resolve) => {
-    process.once("SIGINT", resolve);
-    process.once("SIGTERM", resolve);
+    const keepAlive = setInterval(() => undefined, 2 ** 30);
+    const stop = (): void => { clearInterval(keepAlive); resolve(); };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
   });
 }
 
